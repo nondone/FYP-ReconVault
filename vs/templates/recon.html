@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Scan Results{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Specific styling for the recon page that isn't in style.css */
+    .skipped { color: #484f58; font-style: italic; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-5">
+    <h2 class="mb-1">ReconVault Scanner</h2>
+    <p class="text-secondary">Execute automated reconnaissance modules</p>
+</div>
+
+<div class="row mb-5">
+    <div class="col-md-8 col-lg-6">
+        <div class="custom-card shadow">
+            <form method="POST" action="/recon" id="reconForm">
+                <div class="input-group">
+                    <input type="text" name="target" class="form-control bg-dark text-white border-secondary" placeholder="Enter target domain (e.g., example.com)" required value="{{ target if target else '' }}">
+                    
+                    <select name="scan_mode" class="form-select bg-dark text-white border-secondary" style="max-width: 150px;">
+                        <option value="fast" {% if mode != 'full' %}selected{% endif %}>Fast Scan</option>
+                        <option value="full" {% if mode == 'full' %}selected{% endif %}>Full Scan</option>
+                    </select>
+                    
+                    <button type="submit" class="btn btn-primary px-4 fw-bold">START RECON</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if report %}
+<div class="d-flex justify-content-between align-items-end mb-3">
+    <h4 class="text-info mb-0"><i class="fas fa-search me-2"></i>Results for: {{ target }}</h4>
+    <span class="badge bg-dark border border-secondary text-secondary">Mode: {{ mode.upper() if mode else 'FAST' }}</span>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="custom-card border-top border-primary border-4 shadow-sm">
+            <div class="result-label text-primary"><i class="fas fa-sitemap"></i> Subdomains</div>
+            <pre>{{ report.subdomains if report.subdomains else 'No subdomains found.' }}</pre>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="custom-card border-top border-success border-4 shadow-sm">
+            <div class="result-label text-success"><i class="fas fa-globe"></i> Web Services</div>
+            <pre>{{ report.web if report.web else 'No web data available.' }}</pre>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="custom-card border-top border-info border-4 shadow-sm">
+            <div class="result-label text-info"><i class="fas fa-robot"></i> AI Parameters</div>
+            <pre class="{{ 'skipped' if report.parameters and 'Skipped' in report.parameters }}">{{ report.parameters if report.parameters else '...' }}</pre>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="custom-card border-top border-danger border-4 shadow-sm">
+            <div class="result-label text-danger"><i class="fas fa-bug"></i> Vulnerabilities</div>
+            <pre style="height: 250px;" class="{{ 'skipped' if report.vulnerabilities and 'Skipped' in report.vulnerabilities }}">{{ report.vulnerabilities if report.vulnerabilities else '...' }}</pre>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="custom-card border-top border-warning border-4 shadow-sm">
+            <div class="result-label text-warning"><i class="fas fa-fingerprint"></i> OSINT Data</div>
+            <pre style="height: 250px;">{{ report.osint if report.osint else '...' }}</pre>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="custom-card border-secondary shadow-sm">
+            <div class="result-label text-secondary"><i class="fas fa-terminal"></i> Core System Logs</div>
+            <pre style="height: 80px; color: #666;">[INFO] Modules triggered. Report loaded from output/{{ target }}/reconvault_report.json</pre>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Visual feedback when running a scan
+    document.getElementById('reconForm').onsubmit = function() {
+        const btn = this.querySelector('button');
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>SCANNING...';
+        btn.classList.add('disabled');
+    };
+</script>
+{% endblock %}

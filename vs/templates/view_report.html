@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Report: {{ target }}{% endblock %}
+
+{% block content %}
+<div class="mb-4 d-flex justify-content-between align-items-center">
+    <div>
+        <h2 class="text-info mb-0">{{ target }}</h2>
+        <p class="text-secondary small">Scan Date: {{ date }} | Mode: {{ mode.upper() }}</p>
+    </div>
+    <div class="d-flex gap-2">
+        {% if report_id %}
+        <a href="{{ url_for('visualize_report', report_id=report_id) }}" class="btn btn-outline-info btn-sm">
+            <i class="fas fa-chart-pie"></i> Visualize
+        </a>
+        {% endif %}
+        <a href="{{ url_for('reports_page') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Back to History
+        </a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="custom-card border-top border-info border-4 h-100">
+            <div class="result-label text-info"><i class="fas fa-server"></i> Host Analysis</div>
+            <pre>{{ report.hosts if report.hosts else 'No data available' }}</pre>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="custom-card border-top border-warning border-4 h-100">
+            <div class="result-label text-warning"><i class="fas fa-fingerprint"></i> OSINT Data</div>
+            <pre>{{ report.osint if report.osint else 'No data available' }}</pre>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="custom-card border-top border-primary border-4">
+            <div class="result-label text-primary"><i class="fas fa-sitemap"></i> Subdomains Discovered</div>
+            <pre style="max-height: 300px; overflow-y: auto;">{{ report.subdomains if report.subdomains else 'No data available' }}</pre>
+        </div>
+    </div>
+</div>
+{% endblock %}

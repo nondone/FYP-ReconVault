@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Overview{% endblock %}
+
+{% block content %}
+
+<!-- Dashboard Header with Animation -->
+<div class="mb-4" style="animation: slide-down 0.5s ease-out;">
+    <h1 style="font-size: 2rem; font-weight: 700; color: #e6edf3; margin-bottom: 4px; letter-spacing: -0.5px;">
+        <i class="fas fa-chart-pie me-3" style="color: #58a6ff;"></i>Dashboard Overview
+    </h1>
+    <p style="color: #8b949e; font-size: 13px; letter-spacing: 0.3px; margin-bottom: 0;">
+        <span class="status-pulse-dot me-2"></span>Real-time reconnaissance activity
+    </p>
+</div>
+
+<!-- Welcome Strip -->
+<div class="dash-strip mb-4" style="animation: slide-down 0.55s ease-out;">
+    <div class="dash-strip-left">
+        <div class="dash-strip-title">Welcome back, <span class="dash-strip-user">{{ username }}</span></div>
+        <div class="text-secondary" style="margin-top: 6px; font-size: 12px; line-height: 1.6;">
+            ReconVault scans a domain to find related web addresses, check what is online, collect public OSINT signals, and flag obvious security risks. Results are saved as reports.
+        </div>
+    </div>
+</div>
+
+{% if false %}
+<!-- Non-Technical Overview -->
+<div class="recent-activity mb-5" style="animation: slide-down 0.58s ease-out;">
+    <h5 class="mb-3">
+        <i class="fas fa-circle-info me-2" style="color: #58a6ff;"></i>What ReconVault Does
+    </h5>
+    <p class="text-secondary mb-4" style="font-size: 12px; line-height: 1.7;">
+        ReconVault helps you understand what a website exposes on the internet. It discovers related web addresses, checks which ones are online, collects public clues from the web, and flags obvious security warnings. You can review results per target and keep a history of scans.
+    </p>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="p-3 rounded-3" style="background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.06); height: 100%;">
+                <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.7px; font-weight: 700;">
+                    <i class="fas fa-sitemap me-2" style="color: #58a6ff;"></i>Discover
+                </div>
+                <div style="margin-top: 10px; color: #e6edf3; font-size: 13px; line-height: 1.7;">
+                    Finds subdomains like <span style="font-family: monospace; color: #58a6ff;">api.example.com</span> and checks which web services are alive.
+                </div>
+                <div class="text-secondary" style="margin-top: 8px; font-size: 12px; line-height: 1.6;">
+                    Think: “What’s out there?” and “What’s reachable?”
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="p-3 rounded-3" style="background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.06); height: 100%;">
+                <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.7px; font-weight: 700;">
+                    <i class="fas fa-magnifying-glass me-2" style="color: #3fb950;"></i>Collect
+                </div>
+                <div style="margin-top: 10px; color: #e6edf3; font-size: 13px; line-height: 1.7;">
+                    Pulls public OSINT and historical URLs, then highlights interesting parameters that may matter for testing.
+                </div>
+                <div class="text-secondary" style="margin-top: 8px; font-size: 12px; line-height: 1.6;">
+                    Think: “What evidence exists publicly?”
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="p-3 rounded-3" style="background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.06); height: 100%;">
+                <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.7px; font-weight: 700;">
+                    <i class="fas fa-shield-halved me-2" style="color: #f85149;"></i>Flag
+                </div>
+                <div style="margin-top: 10px; color: #e6edf3; font-size: 13px; line-height: 1.7;">
+                    Runs lightweight checks to surface obvious misconfigurations or known exposures, then maps findings to OWASP categories.
+                </div>
+                <div class="text-secondary" style="margin-top: 8px; font-size: 12px; line-height: 1.6;">
+                    Think: “What looks risky at a glance?”
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 p-3 rounded-3" style="background: rgba(88,166,255,0.06); border: 1px solid rgba(88,166,255,0.14);">
+        <div style="font-size: 12px; color: #8b949e; line-height: 1.7;">
+            <strong style="color: #e6edf3;">Fast scan</strong> is designed for quick visibility.
+            <strong style="color: #e6edf3;">Deep scan</strong> goes further and takes longer.
+            Only scan systems you own or have permission to test.
+        </div>
+    </div>
+</div>
+
+{% endif %}
+<!-- Priority Banner -->
+{% if top_risk_target and top_risk_target != '-' and top_risk_count and top_risk_count|int > 0 %}
+<div class="priority-banner mb-5" style="animation: slide-down 0.6s ease-out;">
+    <div class="priority-left">
+        <div class="priority-title">
+            <i class="fas fa-triangle-exclamation me-2"></i>Priority Attention Needed
+        </div>
+        <div class="priority-sub">
+            <strong>{{ top_risk_target }}</strong> currently has the highest OWASP risk count (<strong>{{ top_risk_count }}</strong>).
+        </div>
+    </div>
+    <div class="priority-actions">
+        <a class="priority-btn" href="/scan?target={{ top_risk_target }}">
+            Review Target <i class="fas fa-arrow-right ms-2"></i>
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<!-- Stat Cards Row -->
+<div class="row g-4 mb-5">
+    <div class="col-md-3">
+        <div class="stat-card text-white health-ok">
+            <i class="fas fa-chart-line text-info stat-icon"></i>
+            <div class="stat-value" style="color: #58a6ff;">{{ total_scans }}</div>
+            <div class="stat-label" data-tooltip="Total reconnaissance scans executed">Total Scans</div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="stat-card text-white health-ok">
+            <i class="fas fa-bullseye text-success stat-icon"></i>
+            <div class="stat-value" style="color: #3fb950;">{{ active_targets }}</div>
+            <div class="stat-label" data-tooltip="Domains actively being monitored">Active Targets</div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="stat-card text-white {{ 'health-risk' if threats_detected|int > 0 else 'health-ok' }}">
+            <i class="fas fa-shield-virus text-danger stat-icon"></i>
+            <div class="stat-value" style="color: #f85149;">{{ threats_detected }}</div>
+            <div class="stat-label" data-tooltip="Total OWASP Top 10 detections across reports">Threats Detected</div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        {% set sr = (success_rate|string)|replace('%','') %}
+        {% set sr_val = (sr|int) %}
+        <div class="stat-card text-white {{ 'health-risk' if sr_val < 60 else ('health-warn' if sr_val < 85 else 'health-ok') }}">
+            <i class="fas fa-percentage text-primary stat-icon"></i>
+            <div class="stat-value" style="color: #4f5af6;">{{ success_rate }}</div>
+            <div class="stat-label" data-tooltip="Successful scan completion rate">Success Rate</div>
+        </div>
+    </div>
+</div>
+
+<!-- Insight Cards -->
+<div class="row g-4 mb-5">
+    <div class="col-lg-4">
+        <div class="recent-activity h-100">
+            <h5 class="mb-3">
+                <i class="fas fa-radiation me-2" style="color: #f85149;"></i>Top Risk Target
+            </h5>
+
+            <div style="font-size: 1.15rem; font-weight: 700; color: #e6edf3; margin-bottom: 6px;">
+                {{ top_risk_target if top_risk_target else '-' }}
+            </div>
+
+            <p class="text-secondary mb-3" style="font-size: 12px;">
+                Total OWASP Top 10 mappings detected:
+                <strong style="color: #f85149;">{{ top_risk_count }}</strong>
+            </p>
+
+            {% if top_risk_target and top_risk_target != '-' %}
+            <a href="/scan?target={{ top_risk_target }}" class="btn btn-sm"
+               style="background: rgba(248,81,73,0.12); border: 1px solid rgba(248,81,73,0.28); color: #f85149; font-weight: 600; border-radius: 8px; padding: 8px 12px;">
+                <i class="fas fa-arrow-up-right-from-square me-1"></i>Review Target
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="recent-activity h-100">
+            <h5 class="mb-3">
+                <i class="fas fa-layer-group me-2" style="color: #58a6ff;"></i>Scan Mode Split
+            </h5>
+
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-secondary">FAST Scans</span>
+                <span class="badge bg-primary">{{ fast_count }}</span>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center">
+                <span class="text-secondary">FULL Scans</span>
+                <span class="badge bg-success">{{ full_count }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="recent-activity h-100">
+            <h5 class="mb-3">
+                <i class="fas fa-shield-halved me-2" style="color: #ffb86b;"></i>Recent OWASP Hits
+            </h5>
+
+            {% if recent_owasp_hits %}
+                <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                    {% for item in recent_owasp_hits %}
+                        <a href="/scan?target={{ item.target }}"
+                           title="{{ item.target }} - {{ item.time }}"
+                           style="text-decoration:none;">
+                            <span class="badge"
+                                  style="background: rgba(249,168,38,0.16); color: #ffb86b; border: 1px solid rgba(249,168,38,0.24); padding: 8px 10px; border-radius: 999px; font-weight: 600;">
+                                {{ item.owasp }} - {{ item.target }}
+                            </span>
+                        </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-secondary mb-0" style="font-size: 12px;">No recent OWASP hits</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity Section -->
+<div class="recent-activity">
+    <h5 class="mb-4">
+        <i class="fas fa-clock me-2" style="color: #58a6ff;"></i>Recent Activity
+    </h5>
+
+    {% if activities %}
+        <div class="table-responsive">
+            <table class="table table-dark table-hover mb-0">
+                <thead>
+                    <tr style="border-bottom: 2px solid rgba(88,166,255,0.15);">
+                        <th>
+                            <i class="fas fa-globe me-2" style="color: #58a6ff; opacity: 0.6;"></i>Target Domain
+                        </th>
+                        <th>
+                            <i class="fas fa-calendar-alt me-2" style="color: #58a6ff; opacity: 0.6;"></i>Last Scan Date
+                        </th>
+                        <th>
+                            <i class="fas fa-tachometer-alt me-2" style="color: #58a6ff; opacity: 0.6;"></i>Mode
+                        </th>
+                        <th style="white-space: nowrap; width: 160px;">
+                            <i class="fas fa-server me-2" style="color: #58a6ff; opacity: 0.6;"></i>Location
+                        </th>
+                        <th style="text-align: center; white-space: nowrap; width: 140px;">
+                            <i class="fas fa-play-circle me-2" style="color: #58a6ff; opacity: 0.6;"></i>Action
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for act in activities %}
+                    <tr style="position: relative; transition: all 0.2s ease;">
+                        <td class="text-info">
+                            <i class="fas fa-server me-2" style="color: #58a6ff; opacity: 0.7;"></i>
+                            <span style="letter-spacing: 0.3px; font-family: monospace;">{{ act.target }}</span>
+                        </td>
+                        <td class="text-secondary" style="font-family: monospace; font-size: 12px;">
+                            <i class="fas fa-hourglass-end me-2" style="opacity: 0.5;"></i>
+                            <span>{{ act.time }}</span>
+                        </td>
+                        <td style="font-size: 12px;">
+                            <span class="badge {{ 'bg-primary' if act.mode == 'FAST' else 'bg-success' }}">
+                                {{ act.mode }}
+                            </span>
+                        </td>
+                        <td style="font-size: 12px; white-space: nowrap;">
+                            <span class="badge {{ 'bg-danger' if act.location and 'Kali' in act.location else 'bg-secondary' }}">
+                                {{ act.location if act.location else 'Local WSL' }}
+                            </span>
+                        </td>
+                        <td style="text-align: center; white-space: nowrap;">
+                            <a href="/scan?target={{ act.target }}" class="badge bg-info text-dark text-decoration-none">
+                                <i class="fas fa-play me-1"></i>Resume
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="text-center py-5" style="background: rgba(0,0,0,0.2); border-radius: 10px; border: 1px dashed rgba(88,166,255,0.2);">
+            <i class="fas fa-history fa-3x mb-3" style="color: rgba(88,166,255,0.3);"></i>
+            <p class="text-secondary mb-1" style="font-size: 14px; font-weight: 500;">No recent scans found</p>
+            <p class="text-secondary mb-0" style="font-size: 12px; color: #484f58;">
+                Start your first reconnaissance scan in
+                <a href="/scan" style="color: #58a6ff; text-decoration: none; font-weight: 600; transition: all 0.2s;">
+                    <strong>Scan Target</strong>
+                </a>
+            </p>
+        </div>
+    {% endif %}
+</div>
+
+{% endblock %}

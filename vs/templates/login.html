@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReconVault - Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="login-page">
+
+    <div class="auth-shell">
+        <section class="auth-hero">
+            <div class="auth-hero-top">
+                <div class="auth-brand-chip">
+                    <i class="fas fa-microchip"></i>
+                </div>
+
+                <h1 class="auth-hero-title">Secure access to the ReconVault control plane.</h1>
+                <p class="auth-hero-subtitle">
+                    Authenticate into your recon workspace, launch target scans, inspect findings, and manage your Kali-linked operations from one protected console.
+                </p>
+
+                <div class="auth-hero-stats">
+                    <div class="auth-hero-stat">
+                        <div class="auth-hero-stat-label">Status</div>
+                        <div class="auth-hero-stat-value">Encrypted</div>
+                    </div>
+                    <div class="auth-hero-stat">
+                        <div class="auth-hero-stat-label">Mode</div>
+                        <div class="auth-hero-stat-value">Operator</div>
+                    </div>
+                    <div class="auth-hero-stat">
+                        <div class="auth-hero-stat-label">Platform</div>
+                        <div class="auth-hero-stat-value">ReconVault</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="auth-hero-bottom">
+                <div class="auth-console">
+                    <div class="auth-console-top">
+                        <span class="auth-console-dot" style="background:#ff5f56;"></span>
+                        <span class="auth-console-dot" style="background:#ffbd2e;"></span>
+                        <span class="auth-console-dot" style="background:#27c93f;"></span>
+                        <span class="ms-2" style="font-size:12px; color:#8b949e; font-family:monospace;">vault://access/login</span>
+                    </div>
+                    <div class="auth-console-body">
+                        <div><span class="muted">[AUTH]</span> Awaiting operator credentials...</div>
+                        <div><span class="muted">[CORE]</span> Session gateway online</div>
+                        <div><span class="muted">[SSH]</span> Kali bridge ready</div>
+                        <div><span class="muted">[DB]</span> Vault persistence active</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="auth-panel">
+            <div class="auth-panel-inner">
+                <div class="auth-badge auth-badge-info">
+                    <i class="fas fa-lock"></i>
+                    Protected Access
+                </div>
+
+                <h2 class="auth-title">Operator Login</h2>
+                <p class="auth-copy">Please enter your credentials to access the vault.</p>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                  {% if messages %}
+                    {% for category, message in messages %}
+                      <div class="alert alert-{{ category }} alert-dismissible fade show auth-alert text-start" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>{{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                      </div>
+                    {% endfor %}
+                  {% endif %}
+                {% endwith %}
+
+                <form action="{{ url_for('login') }}" method="POST">
+                    <div class="mb-2 text-start">
+                        <label class="auth-form-label">Username</label>
+                    </div>
+                    <div class="auth-field">
+                        <i class="fas fa-user"></i>
+                        <input type="text" name="username" class="auth-input" placeholder="Enter your username" required>
+                    </div>
+
+                    <div class="mb-2 text-start">
+                        <label class="auth-form-label">Password</label>
+                    </div>
+                    <div class="auth-field">
+                        <i class="fas fa-key"></i>
+                        <input type="password" name="password" class="auth-input" placeholder="Enter your password" required>
+                    </div>
+
+                    <div class="form-check auth-check text-start">
+                        <input type="checkbox" class="form-check-input" id="remember" name="remember">
+                        <label class="form-check-label" for="remember">Remember this operator</label>
+                    </div>
+
+                    <button type="submit" class="auth-btn auth-btn-info">LOGIN SYSTEM</button>
+                </form>
+
+                <div class="auth-footer">
+                    New operator?
+                    <a href="{{ url_for('register') }}">Request Access / Register</a>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+    "auth": {
+        "min_username": 4,
+        "min_password": 8,
+        "max_attempts": 5
+    },
+    "report_integrity": {
+        "required_keys": ["subdomains", "vulnerabilities", "hosts"],
+        "max_target_length": 100,
+        "allowed_chars": "abcdefghijklmnopqrstuvwxyz0123456789.-"
+    }
+}

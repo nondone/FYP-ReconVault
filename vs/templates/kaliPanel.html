@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}SSH Kali{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4" id="kaliPanelRoot"
+     data-kali-user="{{ kali_user }}"
+     data-kali-host="{{ kali_host }}">
+
+
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4 pb-3" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+        <div>
+            <h1 class="fw-semibold m-0" style="font-size: 1.4rem; color: #e6edf3; letter-spacing: 0.3px;">
+                <i class="fas fa-server me-2" style="color: #f85149;"></i>SSH Kali Panel
+            </h1>
+            <p class="m-0 mt-1" style="font-size: 12px; color: #8b949e;">
+                Host: <span style="color: #58a6ff; font-weight: 500;">{{ kali_host }}</span>
+                <span class="ms-3">User: <span style="color: #58a6ff; font-weight: 500;">{{ kali_user }}</span></span>
+                <span class="ms-3">Base: <span style="color: #58a6ff; font-weight: 500;">{{ kali_base }}</span></span>
+            </p>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-3">
+            <div class="rounded-3 overflow-hidden" style="border: 1px solid rgba(248,81,73,0.2); background: rgba(13,17,23,0.75);">
+                <div class="px-3 py-2" style="background: rgba(22,27,34,0.7); border-bottom: 1px solid rgba(255,255,255,0.06);">
+                    <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.7px; color: #f85149;">
+                        Restricted Shell
+                    </span>
+                </div>
+                <div class="p-3">
+                    <div class="mb-3 p-3 rounded-3" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
+                        <div style="font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px;">
+                            Quick Fill
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-sm text-start" onclick="setCommand('pwd')"
+                                    style="background: rgba(88,166,255,0.10); color: #58a6ff; border: 1px solid rgba(88,166,255,0.18); font-family: monospace;">
+                                pwd
+                            </button>
+                            <button type="button" class="btn btn-sm text-start" onclick="setCommand('ls')"
+                                    style="background: rgba(88,166,255,0.10); color: #58a6ff; border: 1px solid rgba(88,166,255,0.18); font-family: monospace;">
+                                ls
+                            </button>
+                            <button type="button" class="btn btn-sm text-start" onclick="setCommand('cd output')"
+                                    style="background: rgba(88,166,255,0.10); color: #58a6ff; border: 1px solid rgba(88,166,255,0.18); font-family: monospace;">
+                                cd output
+                            </button>
+
+                            <button type="button" class="btn btn-sm text-start" onclick="setCommand('whoami')"
+                                    style="background: rgba(88,166,255,0.10); color: #58a6ff; border: 1px solid rgba(88,166,255,0.18); font-family: monospace;">
+                                whoami
+                            </button>
+                            
+                            <button type="button" class="btn btn-sm text-start" onclick="setCommand('hostname')"
+                                    style="background: rgba(88,166,255,0.10); color: #58a6ff; border: 1px solid rgba(88,166,255,0.18); font-family: monospace;">
+                                hostname
+                            </button>
+                            <button type="button" class="btn btn-sm text-start" onclick="setCommand('clear')"
+                                    style="background: rgba(88,166,255,0.10); color: #58a6ff; border: 1px solid rgba(88,166,255,0.18); font-family: monospace;">
+                                clear
+                            </button>
+                            <button type="button" class="btn btn-sm text-start" onclick="setCommand('cd ..')"
+                                     style="background: rgba(88,166,255,0.10); color: #58a6ff; border: 1px solid rgba(88,166,255,0.18); font-family: monospace;">
+                                 cd ..
+                          </button>
+
+                            
+                        </div>
+                    </div>
+
+                    <div class="p-3 rounded-3" style="background: rgba(210,153,34,0.06); border: 1px solid rgba(210,153,34,0.16);">
+                        <div style="font-size: 10px; color: #d29922; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px;">
+                            Notes
+                        </div>
+                        <div style="font-size: 12px; color: #8b949e; line-height: 1.7;">
+                            This panel is limited to the ReconVault workspace on your Kali PC.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-9">
+            <div class="rounded-3 overflow-hidden" style="border: 1px solid rgba(255,255,255,0.08);">
+                <div class="d-flex align-items-center justify-content-between px-3 py-2" style="background: rgba(22,27,34,0.8); border-bottom: 1px solid rgba(255,255,255,0.06);">
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle me-1" style="width: 9px; height: 9px; background: #ff5f56;"></div>
+                        <div class="rounded-circle me-1" style="width: 9px; height: 9px; background: #ffbd2e;"></div>
+                        <div class="rounded-circle me-2" style="width: 9px; height: 9px; background: #27c93f;"></div>
+                        <span id="cwdLabel" style="font-size: 12px; color: #484f58; font-family: monospace;">{{ kali_user }}@{{ kali_host }}:{{ kali_base }}</span>
+                    </div>
+                    <span id="shellStatus" style="font-size: 11px; color: #8b949e;">Ready</span>
+                </div>
+
+                <div class="p-3" style="background: #010409; min-height: 540px; display: flex; flex-direction: column;">
+                    <pre id="terminalOutput" class="m-0 mb-3" style="font-size: 12px; color: #58a6ff; font-family: monospace; white-space: pre-wrap; line-height: 1.6; flex: 1; min-height: 420px; max-height: 420px; overflow-y: auto;">[SYSTEM] Restricted SSH shell ready.
+[INFO] Workspace limited to {{ kali_base }}
+[INFO] Allowed commands: pwd, ls, cd, cat, tail, whoami, hostname, clear
+[INFO] Example: pwd
+</pre>
+
+                    <div class="input-group">
+                        <span class="input-group-text" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #8b949e; font-family: monospace;">$</span>
+                        <input id="commandInput" type="text" class="form-control"
+                               placeholder="Type a restricted command..."
+                               style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #e6edf3; font-family: monospace;">
+                        <button class="btn" id="runCommandBtn" onclick="runKaliShell()"
+                                style="background: rgba(248,81,73,0.12); color: #f85149; border: 1px solid rgba(248,81,73,0.25);">
+                            Run
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

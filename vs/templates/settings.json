@@ -1,0 +1,11 @@
+{
+    "theme_mode": true,
+    "language": "English",
+    "notifications": true,
+    "auto_scan": false,
+    "ssl_verification": true,
+    "threat_alerts": true,
+    "data_encryption": true,
+    "scan_timeout": 300,
+    "max_retries": 3
+}
