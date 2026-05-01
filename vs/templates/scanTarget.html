@@ -1,0 +1,1863 @@
+{% extends "base.html" %}
+
+{% block title %}Scan Center{% endblock %}
+
+{% block content %}
+
+
+<div id="rv-scan-root"
+     data-threat-alerts="{{ '1' if global_settings.threat_alerts else '0' }}"
+     data-kali-host="{{ kali_host or '192.168.100.250' }}"
+     data-kali-user="{{ kali_user or 'kali' }}"
+     class="container-fluid px-4">
+
+
+
+    <div class="d-flex justify-content-between align-items-end mb-4 pb-3" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+        <div>
+            <h1 class="fw-semibold m-0" style="font-size: 1.4rem; color: #e6edf3; letter-spacing: 0.3px;">
+                <i class="fas fa-shield-halved me-2" style="color: #58a6ff;"></i>Recon<span style="color: #58a6ff;">Vault</span> Analysis
+            </h1>
+
+                <p class="m-0 mt-1" style="font-size: 12px; color: #8b949e; line-height: 1.7;">
+                    Target: <span style="color: #58a6ff; font-weight: 500;">{{ target if target else 'No active session' }}</span>
+                    {% if mode %}
+                    <span style="margin-left: 8px; font-size: 11px; padding: 2px 8px; border: 1px solid rgba(88,166,255,0.3); border-radius: 4px; color: #58a6ff;">{{ mode.upper() }}</span>
+                    {% endif %}
+                    <br>
+                    <span style="color: #8b949e;">
+                        Fast Scan: mainly passive reconnaissance with limited direct interaction, designed for quick visibility.
+                    </span>
+                    <br>
+                    <span style="color: #8b949e;">
+                        Deep Scan: active reconnaissance and deeper analysis, using selected modules to probe, inspect, and test the target more thoroughly.
+                    </span>
+                </p>
+
+
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm" onclick="location.reload()"
+                style="border: 1px solid rgba(255,255,255,0.1); color: #8b949e; background: transparent; font-size: 12px;">
+                <i class="fas fa-sync"></i>
+            </button>
+            <button class="btn btn-sm fw-semibold" onclick="window.print()"
+                style="background: rgba(88,166,255,0.12); color: #58a6ff; border: 1px solid rgba(88,166,255,0.3); font-size: 12px;">
+                <i class="fas fa-file-export me-1"></i> Export report
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="p-3 rounded-3" style="background: rgba(88,166,255,0.08); border: 1px solid rgba(255,255,255,0.06);">
+                <div class="mb-2" style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.6px;">
+                    <i class="fas fa-network-wired me-2" style="color: #58a6ff;"></i>Subdomains Found
+                </div>
+                <div class="fw-semibold m-0" style="font-size: 1.8rem; color: #58a6ff; line-height: 1;">
+                    {{ (report.subdomains_all or report.subdomains).split('\n') | select | list | length if report and ((report.subdomains_all and report.subdomains_all != "...") or (report.subdomains and report.subdomains != "...")) else '0' }}
+                </div>
+            </div>
+        </div>
+
+        
+        <div class="col-md-3">
+            <div class="p-3 rounded-3" style="background: rgba(248,81,73,0.08); border: 1px solid rgba(255,255,255,0.06);">
+                <div class="mb-2" style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.6px;">
+                    <i class="fas fa-bug me-2" style="color: #f85149;"></i>Vulnerabilities
+                </div>
+                <div class="fw-semibold m-0" style="font-size: 1.8rem; color: #f85149; line-height: 1;">
+                    {% if report and report.vulnerabilities and report.vulnerabilities != "..." %}
+                        {% set ns = namespace(count=0) %}
+                        {% for vuln in report.vulnerabilities.split('\n') %}
+                            {% set line = vuln.strip() %}
+                            {% if line and '[OWASP' in line %}
+                                {% set ns.count = ns.count + 1 %}
+                            {% endif %}
+                        {% endfor %}
+                        {{ ns.count }}
+                    {% else %}
+                        0
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+
+        <div class="col-md-3">
+            <div class="p-3 rounded-3" style="background: rgba(63,185,80,0.08); border: 1px solid rgba(255,255,255,0.06);">
+                <div class="mb-2" style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.6px;">
+                    <i class="fas fa-globe me-2" style="color: #3fb950;"></i>Web services
+                </div>
+                <div class="fw-semibold m-0" style="font-size: 1.8rem; color: #3fb950; line-height: 1;">
+                    {{ report.web.split('\n')|length if report and report.web != "..." else '0' }}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="p-3 rounded-3" style="background: rgba(210,153,34,0.08); border: 1px solid rgba(255,255,255,0.06);">
+                <div class="mb-2" style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.6px;">
+                    <i class="fas fa-fingerprint me-2" style="color: #d29922;"></i>OSINT signals
+                </div>
+                <div class="fw-semibold m-0" style="font-size: 1.8rem; color: #d29922; line-height: 1;">
+                    {{ report.osint.split('\n')|length if report and report.osint != "..." else '0' }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+    <div class="col-lg-4">
+
+    <div id="rv-scan-config-panel" class="mb-3 rounded-3 overflow-hidden" style="border: 1px solid rgba(255,255,255,0.07); background: rgba(13,17,23,0.6);">
+        <div class="px-3 py-2 d-flex justify-content-between align-items-center"
+            style="background: rgba(22,27,34,0.6); border-bottom: 1px solid rgba(255,255,255,0.06);">
+            <div class="banner-help-wrap">
+                <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #d29922;">
+                    <i class="fas fa-sliders-h me-2"></i>Scan configuration
+                </span>
+                <button type="button" class="banner-help-btn" onclick="toggleBannerHelp('help-config')">?</button>
+                <div id="help-config" class="banner-help-pop">
+                    Choose the target, scan mode, and modules before starting the engine.
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4">
+            <form id="reconForm">
+                <input type="text" name="target" id="targetInput"
+                    class="form-control mb-3"
+                    placeholder="domain.com"
+                    value="{{ target if target else '' }}" required
+                    style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #e6edf3; font-size: 14px; font-family: monospace; border-radius: 8px; padding: 12px 14px;">
+
+                <div class="btn-group w-100 mb-3">
+                    <input type="radio" class="btn-check" name="scan_mode" id="fast" value="fast" checked>
+                    <label class="btn btn-sm" for="fast"
+                        style="border: 1px solid rgba(88,166,255,0.3); color: #58a6ff; font-size: 12px; font-weight: 500; padding: 10px 12px;">Fast scan</label>
+
+                    <input type="radio" class="btn-check" name="scan_mode" id="full" value="full">
+                    <label class="btn btn-sm" for="full"
+                        style="border: 1px solid rgba(248,81,73,0.3); color: #f85149; font-size: 12px; font-weight: 500; padding: 10px 12px;">Deep scan</label>
+                </div>
+
+
+
+
+                <!-- templates/scanTarget.html
+                ADD this block right AFTER the Fast/Deep scan button group (after </div> of btn-group)
+                -->
+
+                <div id="kali-engine-toggle" class="d-none d-flex align-items-center justify-content-between mb-3 p-4 rounded-3"
+                    style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08);">
+                    <div style="min-width: 0;">
+                        <div style="font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.7px; font-weight: 700;">
+                            Kali Engine (SSH)
+                        </div>
+                        <div style="font-size: 12px; color: #8b949e; line-height: 1.6;">
+                            Optional: run Deep scan on Kali PC seperate the resources. Fast scan always runs on Local WSL.
+                        </div>
+                        <div style="margin-top: 8px; font-size: 12px; font-family: monospace; color: #58a6ff; line-height: 1.5;">
+                            Host: {{ kali_host or '192.168.100.250' }} | User: {{ kali_user or 'kali' }}
+                        </div>
+                        <div style="margin-top: 10px;">
+                            <span id="kali-ssh-inline-status"
+                                  style="display: inline-block; font-size: 11px; letter-spacing: 0.7px; text-transform: uppercase;
+                                         padding: 3px 10px; border-radius: 999px;
+                                         background: rgba(248,81,73,0.10); border: 1px solid rgba(248,81,73,0.26);
+                                          color: #f85149; font-weight: 700;">
+                                Disconnected
+                            </span>
+                        </div>
+                    </div>
+                    <div class="form-check form-switch m-0" style="flex-shrink: 0; transform: scale(1.15); transform-origin: right center;">
+                        <input class="form-check-input" type="checkbox" id="useKaliFull" name="use_kali_full" style="cursor: pointer;">
+                    </div>
+                </div>
+
+
+
+
+
+                <div id="module-selection" class="mb-3 d-none p-3 rounded-2" style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.07);">
+                    <div class="d-flex justify-content-between align-items-center mb-2 pb-2" style="border-bottom: 1px solid rgba(255,255,255,0.06);">
+                        <span style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600;">Modules</span>
+                        <div class="form-check m-0">
+                            <input class="form-check-input" type="checkbox" id="toggle-all" checked>
+                            <label class="form-check-label" for="toggle-all" style="font-size: 12px; color: #58a6ff;">All</label>
+                        </div>
+                    </div>
+
+                    {% for mod in [
+                        ('subdomains', 'Subdomains', 'Finds extra subdomains like api.example.com and admin.example.com.'),
+                        ('hosts', 'Hosts', 'Checks where the target is hosted and gathers IP details.'),
+                        ('web', 'Web services', 'Finds live websites and identifies what they are running.'),
+                        ('paramining', 'AI params', 'Looks for URL fields and inputs that may be useful for testing.'),
+                        ('vulns', 'Vulns', 'Checks for common security weaknesses and misconfigurations.'),
+                        ('osint', 'OSINT', 'Collects public information such as DNS, WHOIS, and online traces.')
+                    ] %}
+                    <div class="form-check mb-1">
+                        <input class="form-check-input module-checkbox" type="checkbox" name="modules" value="{{ mod[0] }}" id="mod_{{ mod[0] }}" checked>
+                        <label class="form-check-label" for="mod_{{ mod[0] }}" style="font-size: 13px; color: #e6edf3;">{{ mod[1] }}</label>
+                        <div class="ms-4 mt-1" style="font-size: 11px; color: #8b949e; line-height: 1.5;">
+                            {{ mod[2] }}
+                        </div>
+                    </div>
+
+
+                    {% if mod[0] == 'subdomains' %}
+                    <div id="dict-picker" class="ms-3 mb-3 mt-2"
+                        style="border-left: 2px solid rgba(88,166,255,0.3); padding-left: 12px; transition: all 0.3s ease;">
+                        <label style="font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; display:block; margin-bottom:5px; font-family: monospace;">
+                            <i class="fas fa-book me-1" style="color:#58a6ff;"></i> Asset Wordlist
+                        </label>
+                        <select id="dict-select" name="dict_file"
+                                style="width:100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(88,166,255,0.25); border-radius:6px; color: #e6edf3; font-size: 12px; font-family: monospace; padding: 8px 10px; cursor:pointer;">
+                            <option value="dns_list.txt">dns_list.txt (Standard)</option>
+                            <option value="assetnote_best.txt">assetnote_best.txt (Best from Assetnote)</option>
+                            <option value="bitquark.txt">bitquark.txt (Bitquark List)</option>
+                            <option value="deepmagic_top500.txt">deepmagic_top500.txt (Top 500 Deepmagic)</option>
+                            <option value="deepmagic_top50k.txt">deepmagic_top50k.txt (Top 50k Deepmagic)</option>
+                            <option value="dns_big.txt">dns_big.txt (Big DNS List)</option>
+                            <option value="fierce.txt">fierce.txt (Fierce Tool List)</option>
+                            <option value="seclists_top5k.txt">seclists_top5k.txt (SecLists Top 5k)</option>
+                            <option value="seclists_top20k.txt">seclists_top20k.txt (SecLists Top 20k)</option>
+                            <option value="seclists_top110k.txt">seclists_top110k.txt (SecLists Top 110k) [HEAVY]</option>
+                        </select>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+
+                <button type="submit" id="start-btn" class="btn w-100 fw-semibold mb-2"
+                    style="background: rgba(88,166,255,0.15); color: #58a6ff; border: 1px solid rgba(88,166,255,0.3); font-size: 14px; padding: 10px;">
+                    <i class="fas fa-play me-2"></i>Start engine
+                </button>
+
+                <button type="button" id="stop-btn" class="btn w-100 fw-semibold mb-2 d-none"
+                    onclick="stopScanning(window.currentScanMode || 'local')"
+
+                    style="background: rgba(248,81,73,0.15); color: #f85149; border: 1px solid rgba(248,81,73,0.3); font-size: 14px; padding: 10px;">
+                    <i class="fas fa-stop-circle me-2"></i>Stop engine
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    <div id="rv-malware-panel" class="rounded-3 overflow-hidden" style="border: 1px solid rgba(210,153,34,0.24); background: rgba(13,17,23,0.6);">
+        <div class="px-4 py-3 d-flex justify-content-between align-items-center"
+            style="background: rgba(22,27,34,0.6); border-bottom: 1px solid rgba(255,255,255,0.06);">
+            <div class="banner-help-wrap">
+                <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #d29922;">
+                    Malware sandbox
+                </span>
+                <button type="button" class="banner-help-btn" onclick="toggleBannerHelp('help-malware')">?</button>
+                <div id="help-malware" class="banner-help-pop">
+                    Upload a file for VirusTotal-based malware analysis and open the result in your internal file scan page.
+                </div>
+            </div>
+            <button class="rv-expand-btn" onclick="openModal('modal-malware')">
+                <i class="fas fa-expand-alt"></i> Expand
+            </button>
+        </div>
+
+        
+        <div class="p-4">
+            <form action="/scan_file" method="POST" enctype="multipart/form-data" target="_blank">
+                <input type="hidden" name="target" value="{{ target if target else '' }}">
+                <input type="file" name="file" class="form-control mb-3 p-2"
+                    style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: #8b949e; font-size: 13px;">
+                <button type="submit" class="btn w-100 fw-semibold"
+                    style="background: rgba(210,153,34,0.15); color: #d29922; border: 1px solid rgba(210,153,34,0.3); font-size: 13px; padding: 10px 12px;">
+                    Run virus scan
+                </button>
+            </form>
+        </div>
+    </div>
+    {% if malware_result %}
+<div class="mt-3 rounded-3 overflow-hidden" style="border: 1px solid rgba(210,153,34,0.22); background: rgba(13,17,23,0.6);">
+    <div class="px-3 py-2" style="background: rgba(22,27,34,0.6); border-bottom: 1px solid rgba(255,255,255,0.06);">
+        <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.7px; color: #d29922;">
+            Malware Sandbox Result
+        </span>
+    </div>
+    <div class="p-3" style="font-size: 12px; color: #e6edf3; line-height: 1.8;">
+        <div class="mb-2"><strong>File:</strong> {{ malware_result.filename }}</div>
+        <div class="mb-2" style="word-break: break-all;"><strong>SHA256:</strong> {{ malware_result.sha256 }}</div>
+        <div class="mb-2"><strong>Type:</strong> {{ malware_result.type_description }}</div>
+        <div class="mb-2"><strong>Reputation:</strong> {{ malware_result.reputation }}</div>
+
+        <div class="mt-3 mb-2" style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px;">
+            Detection Summary
+        </div>
+
+        <div class="d-grid gap-2">
+            <div><strong>Malicious:</strong> <span style="color:#f85149;">{{ malware_result.stats.malicious }}</span></div>
+            <div><strong>Suspicious:</strong> <span style="color:#d29922;">{{ malware_result.stats.suspicious }}</span></div>
+            <div><strong>Harmless:</strong> <span style="color:#3fb950;">{{ malware_result.stats.harmless }}</span></div>
+            <div><strong>Undetected:</strong> <span style="color:#8b949e;">{{ malware_result.stats.undetected }}</span></div>
+        </div>
+
+        <div class="mt-3">
+            <a href="{{ malware_result.vt_link }}" target="_blank"
+               style="display:inline-block; font-size:12px; padding:6px 10px; border:1px solid rgba(88,166,255,0.28); border-radius:6px; color:#58a6ff; text-decoration:none;">
+                Open in VirusTotal
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+
+    <!-- Anchor: in fast scan, place Host/Vuln/OWASP here to fill the left column gap -->
+    <div id="rv-left-anchor"></div>
+
+    <!-- FAST scan layout fillers (does not change scan logic; JS moves panels here in FAST only) -->
+    <div id="rv-fast-left-layout" class="d-none">
+        <div class="rv-fast-row rv-fast-row-3">
+            <div id="rv-fast-slot-host"></div>
+            <div id="rv-fast-slot-osint"></div>
+            <div id="rv-fast-slot-ai"></div>
+        </div>
+        <div class="rv-fast-row rv-fast-row-2" style="margin-top: 12px;">
+            <div id="rv-fast-slot-vuln"></div>
+            <div id="rv-fast-slot-owasp"></div>
+        </div>
+    </div>
+
+</div>
+
+    
+
+
+        <div class="col-lg-8">
+
+            <div id="scanOutput" class="mb-3 d-none rounded-3 overflow-hidden" style="border: 1px solid rgba(255,255,255,0.08);">
+                <div class="d-flex align-items-center justify-content-between px-3 py-2" style="background: rgba(22,27,34,0.8); border-bottom: 1px solid rgba(255,255,255,0.06);">
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle me-1" style="width: 9px; height: 9px; background: #ff5f56;"></div>
+                        <div class="rounded-circle me-1" style="width: 9px; height: 9px; background: #ffbd2e;"></div>
+                        <div class="rounded-circle me-2" style="width: 9px; height: 9px; background: #27c93f;"></div>
+                        <span style="font-size: 12px; color: #484f58; font-family: monospace;">kali@recon-vault:~/logs</span>
+                    </div>
+                    <button class="rv-expand-btn" onclick="openModal('modal-terminal')">
+                        <i class="fas fa-expand-alt"></i> Expand
+                    </button>
+                </div>
+                <div class="p-3" style="background: #010409; height: 140px; overflow-y: auto;">
+                    <pre id="terminalText" class="m-0" style="font-size: 12px; color: #58a6ff; font-family: monospace; white-space: pre-wrap; line-height: 1.6;"></pre>
+                </div>
+            </div>
+
+            <div class="row g-3">
+
+                <div class="col-md-6">
+                    <div id="rv-network-panel" class="rounded-3 overflow-hidden h-100" style="border: 1px solid rgba(255,255,255,0.07); background: rgba(13,17,23,0.6);">
+                        <div class="px-3 py-2 d-flex justify-content-between align-items-center" style="background: rgba(22,27,34,0.6); border-bottom: 1px solid rgba(255,255,255,0.06);">
+                            <div class="banner-help-wrap">
+                                <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #58a6ff;">
+                                    <i class="fas fa-network-wired me-2"></i>Network map
+                                </span>
+                                <button type="button" class="banner-help-btn" onclick="toggleBannerHelp('help-network')">?</button>
+                                <div id="help-network" class="banner-help-pop">
+                                    Shows discovered subdomains and lets you open or scan them directly.
+                                </div>
+                            </div>
+
+                            <button class="rv-expand-btn" onclick="openModal('modal-network')">
+                                <i class="fas fa-expand-alt"></i> Expand
+                            </button>
+                        </div>
+
+                        
+                        <div id="rv-network-body" style="height: 380px; overflow-y: auto;">
+                            <table class="table table-dark table-hover mb-0 rv-network-table" style="font-size: 12px;">
+                                <colgroup>
+                                    <col class="rv-col-subdomain">
+                                    <col class="rv-col-action">
+                                </colgroup>
+                                <thead>
+                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.06);">
+                                        <th class="ps-3 py-2" style="font-size: 11px; color: #484f58; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; background: transparent;">Subdomain</th>
+                                        <th class="py-2 text-end pe-3" style="font-size: 11px; color: #484f58; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; background: transparent;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if report and (report.subdomains_all or report.subdomains) and (report.subdomains_all or report.subdomains) != "..." %}
+                                            {% for sub in (report.subdomains_all or report.subdomains).split('\n') %}
+                                                {% if sub.strip() %}
+                                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                                                    <td class="ps-3 py-2" style="font-family: monospace; color: #58a6ff;">
+                                                        <span class="rv-subdomain-text">{{ sub.strip() }}</span>
+                                                    </td>
+                                                    <td class="text-end pe-3 py-2" style="white-space: nowrap;">
+                                                        <div class="d-inline-flex gap-2">
+                                                            <a href="https://{{ sub.strip() }}" target="_blank" rel="noopener noreferrer"
+                                                                style="font-size: 11px; padding: 3px 8px; border: 1px solid rgba(63,185,80,0.3); border-radius: 4px; color: #3fb950; text-decoration: none;">
+                                                            Open
+                                                        </a>
+                                                        <a href="/recon?target={{ sub.strip() }}"
+                                                            style="font-size: 11px; padding: 3px 8px; border: 1px solid rgba(88,166,255,0.3); border-radius: 4px; color: #58a6ff; text-decoration: none;">
+                                                            Scan
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr><td colspan="2" class="text-center py-5" style="color: #484f58; font-size: 12px;">Awaiting discovery...</td></tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+
+<div class="col-md-6">
+    <div id="rv-web-panel" class="rounded-3 overflow-hidden h-100" style="border: 1px solid rgba(255,255,255,0.07); background: rgba(13,17,23,0.6);">
+        <div class="px-3 py-2 d-flex justify-content-between align-items-center" style="background: rgba(22,27,34,0.6); border-bottom: 1px solid rgba(255,255,255,0.06);">
+            <div class="banner-help-wrap">
+                <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #3fb950;">
+                    <i class="fas fa-globe me-2"></i>Web services audit
+                </span>
+                <button type="button" class="banner-help-btn" onclick="toggleBannerHelp('help-web')">?</button>
+                <div id="help-web" class="banner-help-pop">
+                    Lists live websites, redirects, technologies, headers, and basic web exposure.
+                </div>
+            </div>
+
+            <button class="rv-expand-btn" onclick="openModal('modal-web')">
+                <i class="fas fa-expand-alt"></i> Expand
+            </button>
+        </div>
+
+
+        <div id="rv-web-body" style="height: 380px;">
+            <pre class="p-3 m-0 h-100" style="font-family: monospace; font-size: 12px; color: #3fb950; white-space: pre-wrap; overflow-y: auto; line-height: 1.6; background: rgba(13,17,23,0.6);">{{ report.web if report else 'Awaiting service fingerprinting...' }}</pre>
+        </div>
+    </div>
+</div>
+
+                <!-- Anchor: secondary panels normally live in the right column (deep scan). -->
+                <div id="rv-right-anchor"></div>
+
+                <!-- Secondary panels (Host/Vuln/OWASP, OSINT/AI Params, System Logs) -->
+                <div id="rv-secondary-panels">
+                    <div id="rv-hvo-anchor"></div>
+
+                    <div id="rv-hvo-panels">
+    <div class="col-12">
+    <div class="row g-3">
+        <div class="col-md-4 rv-hvo-col" id="rv-host-col">
+            <div class="rounded-3 overflow-hidden h-100" style="border: 1px solid rgba(255,255,255,0.07); background: rgba(13,17,23,0.6);">
+                <div class="px-3 py-2 d-flex justify-content-between align-items-center" style="background: rgba(22,27,34,0.6); border-bottom: 1px solid rgba(255,255,255,0.06);">
+                    <div class="banner-help-wrap">
+                        <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #8b949e;">
+                            <i class="fas fa-server me-2"></i>Host infrastructure
+                        </span>
+                        <button type="button" class="banner-help-btn" onclick="toggleBannerHelp('help-hosts')">?</button>
+                        <div id="help-hosts" class="banner-help-pop">
+                            Shows IP, hosting, and infrastructure details related to the target.
+                        </div>
+                    </div>
+
+                    <button class="rv-expand-btn" onclick="openModal('modal-hosts')">
+                        <i class="fas fa-expand-alt"></i> Expand
+                    </button>
+                </div>
+
+                <div style="height: 220px; overflow-y: auto; background: rgba(13,17,23,0.6);">
+                    {% if report and report.hosts and report.hosts != "No data captured." and report.hosts != "N/A" %}
+                        <pre class="p-3 m-0" style="font-family: monospace; font-size: 11px; color: #e6edf3; white-space: pre-wrap; line-height: 1.6;">{{ report.hosts }}</pre>
+                    {% else %}
+                        <div class="text-center mt-5" style="color: #484f58; font-size: 12px;">
+                            <i class="fas fa-map-marker-alt d-block mb-2" style="color: #484f58;"></i>
+                            Awaiting IP / geo data...
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 rv-hvo-col" id="rv-vuln-col">
+            <div class="rounded-3 overflow-hidden h-100" style="border: 1px solid rgba(255,255,255,0.07); background: rgba(13,17,23,0.6);">
+                <div class="px-3 py-2 d-flex justify-content-between align-items-center" style="background: rgba(22,27,34,0.6); border-bottom: 1px solid rgba(255,255,255,0.06);">
+                    <div class="banner-help-wrap">
+                        <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #f85149;">
+                            <i class="fas fa-bug me-2"></i>Vulnerabilities
+                        </span>
+                        <button type="button" class="banner-help-btn" onclick="toggleBannerHelp('help-vulns')">?</button>
+                        <div id="help-vulns" class="banner-help-pop">
+                            Displays detected weaknesses, suspicious findings, and security issues.
+                        </div>
+                    </div>
+
+                    <button class="rv-expand-btn" onclick="openModal('modal-vulns')">
+                        <i class="fas fa-expand-alt"></i> Expand
+                    </button>
+                </div>
+
+                <div style="height: 220px; overflow-y: auto; background: rgba(13,17,23,0.6);">
+                    {% if report and report.vulnerabilities and report.vulnerabilities != "..." %}
+                        {% set ns = namespace(found=false) %}
+                        {% for vuln in report.vulnerabilities.split('\n') %}
+                            {% set line = vuln.strip() %}
+                            {% if line and '[OWASP' not in line and '[+] OWASP TOP 10 MAPPING' not in line %}
+                                {% set ns.found = true %}
+                                <div class="px-3 py-2" style="border-bottom: 1px solid rgba(255,255,255,0.04); border-left: 2px solid rgba(248,81,73,0.5); background: rgba(248,81,73,0.04); font-family: monospace; font-size: 12px; color: #f85149;">
+                                    <i class="fas fa-exclamation-triangle me-2" style="opacity: 0.7;"></i>{{ line }}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                        {% if not ns.found %}
+                            <div class="text-center mt-5" style="color: #484f58; font-size: 12px;">No security flaws logged.</div>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-center mt-5" style="color: #484f58; font-size: 12px;">No security flaws logged.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 rv-hvo-col" id="rv-owasp-col">
+            <div class="rounded-3 overflow-hidden h-100" style="border: 1px solid rgba(210,153,34,0.2); background: rgba(13,17,23,0.6);">
+                <div class="px-3 py-2 d-flex justify-content-between align-items-center" style="background: rgba(22,27,34,0.6); border-bottom: 1px solid rgba(255,255,255,0.06);">
+                    <div class="banner-help-wrap">
+                        <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #d29922;">
+                            <i class="fas fa-shield-alt me-2"></i>OWASP Top 10
+                        </span>
+                        <button type="button" class="banner-help-btn" onclick="toggleBannerHelp('help-owasp')">?</button>
+                        <div id="help-owasp" class="banner-help-pop">
+                            Maps findings into well-known OWASP risk categories for easier understanding.
+                        </div>
+                    </div>
+
+                    <button class="rv-expand-btn" onclick="openModal('modal-owasp')">
+                        <i class="fas fa-expand-alt"></i> Expand
+                    </button>
+                </div>
+
+                <div style="height: 220px; overflow-y: auto; background: rgba(13,17,23,0.6);">
+                    {% if report and report.vulnerabilities and report.vulnerabilities != "..." %}
+                        {% set ns = namespace(found=false) %}
+                        {% for vuln in report.vulnerabilities.split('\n') %}
+                            {% set line = vuln.strip() %}
+                            {% if line and '[OWASP' in line %}
+                                {% set ns.found = true %}
+                                <div class="px-3 py-2" style="border-bottom: 1px solid rgba(255,255,255,0.04); border-left: 2px solid rgba(210,153,34,0.5); background: rgba(210,153,34,0.05); font-family: monospace; font-size: 12px; color: #d29922;">
+                                    <i class="fas fa-shield-alt me-2" style="opacity: 0.7;"></i>{{ line }}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                        {% if not ns.found %}
+                            <div class="text-center mt-5" style="color: #484f58; font-size: 12px;">
+                                No OWASP Top 10 mapping found.
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-center mt-5" style="color: #484f58; font-size: 12px;">
+                            Awaiting OWASP mapping...
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+                    </div> <!-- /#rv-hvo-panels -->
+
+<div class="col-12" id="rv-osai-row">
+    <div class="row g-3 mt-1">
+        <div class="col-md-6" id="rv-osint-col">
+            <div class="rounded-3 overflow-hidden h-100" style="border: 1px solid rgba(255,255,255,0.07); background: rgba(13,17,23,0.6);">
+                <div class="px-3 py-2 d-flex justify-content-between align-items-center" style="background: rgba(22,27,34,0.6); border-bottom: 1px solid rgba(255,255,255,0.06);">
+                    <div class="banner-help-wrap">
+                        <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #d29922;">
+                            <i class="fas fa-fingerprint me-2"></i>OSINT
+                        </span>
+                        <button type="button" class="banner-help-btn" onclick="toggleBannerHelp('help-osint')">?</button>
+                        <div id="help-osint" class="banner-help-pop">
+                            Summarizes public information such as DNS, registration, certificates, and online traces.
+                        </div>
+                    </div>
+
+                    <button class="rv-expand-btn" onclick="openModal('modal-osint')">
+                        <i class="fas fa-expand-alt"></i> Expand
+                    </button>
+                </div>
+
+                <pre class="p-3 m-0" style="height: 240px; overflow-y: auto; background: rgba(13,17,23,0.6); font-family: monospace; font-size: 11px; color: #d29922; white-space: pre-wrap; line-height: 1.6;">{{ report.osint if report else '...' }}</pre>
+            </div>
+        </div>
+
+       <div class="col-md-6" id="rv-ai-col">
+    <div class="rounded-3 overflow-hidden h-100" style="border: 1px solid rgba(255,255,255,0.07); background: rgba(13,17,23,0.6);">
+        <div class="px-3 py-2 d-flex justify-content-between align-items-center"
+             style="background: rgba(22,27,34,0.6); border-bottom: 1px solid rgba(255,255,255,0.06); position: relative; z-index: 5;">
+            <div class="banner-help-wrap">
+                <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #58a6ff;">
+                    <i class="fas fa-code me-2"></i>AI Params
+                </span>
+                <button type="button" class="banner-help-btn" onclick="toggleBannerHelp('help-params')">?</button>
+                <div id="help-params" class="banner-help-pop">
+                    Shows discovered and predicted parameters that may be useful for deeper testing.
+                </div>
+            </div>
+
+                <button class="rv-expand-btn" onclick="openModal('modal-params')">
+                    <i class="fas fa-expand-alt"></i> Expand
+                </button>
+            </div>
+    
+
+        <pre class="p-3 m-0"
+             style="height: 240px; overflow-y: auto; background: rgba(13,17,23,0.6); font-family: monospace; font-size: 11px; color: #58a6ff; white-space: pre-wrap; line-height: 1.6;">{{ report.parameters if report else '...' }}</pre>
+
+        <div class="p-3" style="border-top: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.2);">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: #8b949e;">
+                    Historical URL Preview
+                </span>
+                <button type="button" class="rv-expand-btn" onclick="openModal('modal-historical-urls')">
+                    <i class="fas fa-list me-1"></i> View full list
+                </button>
+            </div>
+            <div id="historical-url-preview"
+                 style="max-height: 150px; overflow-y: auto; font-family: monospace; font-size: 11px; line-height: 1.6; color: #8b949e;">
+                Awaiting historical URL extraction...
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+
+            <!-- System logs - UPDATED FOR RESPONSIVENESS -->
+            <div id="rv-logs-panel" class="mt-3 rounded-3 overflow-hidden" style="border: 1px solid rgba(255,255,255,0.07);">
+                <div class="px-3 py-2 d-flex justify-content-between align-items-center" style="background: rgba(22,27,34,0.6); border-bottom: 1px solid rgba(255,255,255,0.06);">
+                    <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #8b949e;">
+                        <i class="fas fa-terminal me-2"></i>System logs
+                    </span>
+                    <div class="d-flex align-items-center gap-3">
+                        <span style="font-size: 10px; padding: 2px 8px; border-radius: 99px; background: rgba(63,185,80,0.12); color: #3fb950; border: 1px solid rgba(63,185,80,0.25); letter-spacing: 0.5px; font-weight: 600;">Online</span>
+                        <button class="rv-expand-btn" onclick="openModal('modal-logs')">
+                            <i class="fas fa-expand-alt"></i> Expand
+                        </button>
+                    </div>
+                </div>
+                <!-- ✅ NOW USING ID FOR CSS STYLING -->
+                <div id="system-logs" class="px-3 py-2">
+                    [INFO] ReconVault engine ready. Standing by for target.
+                </div>
+            </div>
+
+                </div> <!-- /#rv-secondary-panels -->
+        </div>
+    </div>
+
+    </div>
+
+</div>
+
+<!-- Anchor: in fast scan, move secondary panels here so they span full width. -->
+<div class="row g-4 mt-1" id="rv-fullwidth-row">
+    <div class="col-12" id="rv-fullwidth-anchor"></div>
+</div>
+
+<!-- ===================== MODALS ===================== -->
+<!-- Historical URLs Modal -->
+<div id="modal-historical-urls" class="rv-fullscreen-overlay" onclick="closeModalOutside(event, 'modal-historical-urls')">
+    <div class="rv-fullscreen-modal" style="max-width: 1100px;">
+        <div class="rv-fullscreen-header">
+            <span style="color: #58a6ff;"><i class="fas fa-history me-2"></i>Historical URLs (From Parameter Mining)</span>
+            <button class="rv-close-btn" onclick="closeModal('modal-historical-urls')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="rv-fullscreen-content" style="padding: 0;">
+            <pre id="historical-url-full-list"
+                 class="p-3 m-0"
+                 style="height: 70vh; overflow-y: auto; background: rgba(13,17,23,0.6); font-family: monospace; font-size: 12px; color: #8b949e; white-space: pre-wrap; line-height: 1.6;">No historical URLs found.</pre>
+        </div>
+    </div>
+</div>
+
+
+ 
+
+<!-- Malware Modal -->
+<div id="modal-malware" class="rv-fullscreen-overlay" onclick="closeModalOutside(event, 'modal-malware')">
+    <div class="rv-fullscreen-modal" style="max-width: 600px;">
+        <div class="rv-fullscreen-header">
+            <span style="color: #d29922;"><i class="fas fa-biohazard me-2"></i>Malware sandbox</span>
+            <button class="rv-close-btn" onclick="closeModal('modal-malware')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="rv-fullscreen-content p-4">
+            <form action="/scan_file" method="POST" enctype="multipart/form-data">
+                <div class="mb-4 p-4 rounded-3 text-center" style="border: 2px dashed rgba(210,153,34,0.3); background: rgba(210,153,34,0.04);">
+                    <i class="fas fa-cloud-upload-alt d-block mb-3" style="font-size: 2rem; color: #d29922;"></i>
+                    <p style="color: #8b949e; font-size: 14px; margin-bottom: 12px;">Drop a file here or click to browse</p>
+                    <input type="file" name="file" class="form-control" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #8b949e; font-size: 13px;">
+                </div>
+                <button type="submit" class="btn w-100 fw-semibold" style="background: rgba(210,153,34,0.15); color: #d29922; border: 1px solid rgba(210,153,34,0.3); font-size: 14px; padding: 10px;">Run virus scan</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Terminal Modal -->
+<div id="modal-terminal" class="rv-fullscreen-overlay" onclick="closeModalOutside(event, 'modal-terminal')">
+    <div class="rv-fullscreen-modal">
+        <div class="rv-fullscreen-header">
+            <div class="d-flex align-items-center gap-2">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #ff5f56;"></div>
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #ffbd2e;"></div>
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #27c93f;"></div>
+                <span style="color: #484f58; font-family: monospace; margin-left: 8px;">kali@recon-vault:~/logs</span>
+            </div>
+            <button class="rv-close-btn" onclick="closeModal('modal-terminal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="rv-fullscreen-content" style="background: #010409; min-height: 400px;">
+            <pre class="p-4 m-0" style="font-size: 13px; color: #58a6ff; font-family: monospace; white-space: pre-wrap; line-height: 1.7;" id="terminalTextModal">Awaiting scan output...</pre>
+        </div>
+    </div>
+</div>
+
+<!-- Network Map Modal -->
+<div id="modal-network" class="rv-fullscreen-overlay" onclick="closeModalOutside(event, 'modal-network')">
+    <div class="rv-fullscreen-modal">
+        <div class="rv-fullscreen-header">
+            <span style="color: #58a6ff;"><i class="fas fa-network-wired me-2"></i>Network map</span>
+            <button class="rv-close-btn" onclick="closeModal('modal-network')"><i class="fas fa-times"></i></button>
+        </div>
+
+        <div class="rv-fullscreen-content">
+            <table class="table table-dark table-hover mb-0 rv-network-table" style="font-size: 13px;">
+                <colgroup>
+                    <col class="rv-col-subdomain">
+                    <col class="rv-col-action">
+                </colgroup>
+                <thead>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.06);">
+                        <th class="ps-4 py-3" style="font-size: 11px; color: #484f58; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(22,27,34,0.6);">Subdomain</th>
+                        <th class="py-3 text-end pe-4" style="font-size: 11px; color: #484f58; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(22,27,34,0.6);">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if report and (report.subdomains_all or report.subdomains) and (report.subdomains_all or report.subdomains) != "..." %}
+                        {% for sub in (report.subdomains_all or report.subdomains).split('\n') %}
+                            {% if sub.strip() %}
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                                <td class="ps-4 py-3" style="font-family: monospace; color: #58a6ff;">
+                                    <span class="rv-subdomain-text">{{ sub.strip() }}</span>
+                                </td>
+                                <td class="text-end pe-4 py-3">
+                                    <div class="d-inline-flex gap-2">
+                                        <a href="https://{{ sub.strip() }}" target="_blank" rel="noopener noreferrer"
+                                        style="font-size: 12px; padding: 4px 12px; border: 1px solid rgba(63,185,80,0.3); border-radius: 4px; color: #3fb950; text-decoration: none;">
+                                            Open
+                                        </a>
+                                        <a href="/recon?target={{ sub.strip() }}"
+                                        style="font-size: 12px; padding: 4px 12px; border: 1px solid rgba(88,166,255,0.3); border-radius: 4px; color: #58a6ff; text-decoration: none;">
+                                            Scan
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="2" class="text-center py-5" style="color: #484f58; font-size: 13px;">Awaiting discovery...</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Web Services Modal -->
+<div id="modal-web" class="rv-fullscreen-overlay" onclick="closeModalOutside(event, 'modal-web')">
+    <div class="rv-fullscreen-modal">
+        <div class="rv-fullscreen-header">
+            <span style="color: #3fb950;"><i class="fas fa-globe me-2"></i>Web services audit</span>
+            <button class="rv-close-btn" onclick="closeModal('modal-web')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="rv-fullscreen-content" style="background: rgba(13,17,23,0.8);">
+            <pre class="p-4 m-0" style="font-family: monospace; font-size: 13px; color: #3fb950; white-space: pre-wrap; line-height: 1.7; min-height: 400px;">{{ report.web if report else 'Awaiting service fingerprinting...' }}</pre>
+        </div>
+    </div>
+</div>
+
+<!-- Host Infrastructure Modal -->
+<div id="modal-hosts" class="rv-fullscreen-overlay" onclick="closeModalOutside(event, 'modal-hosts')">
+    <div class="rv-fullscreen-modal">
+        <div class="rv-fullscreen-header">
+            <span style="color: #8b949e;"><i class="fas fa-server me-2"></i>Host infrastructure</span>
+            <button class="rv-close-btn" onclick="closeModal('modal-hosts')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="rv-fullscreen-content" style="background: rgba(13,17,23,0.8);">
+            {% if report and report.hosts and report.hosts != "No data captured." and report.hosts != "N/A" %}
+                <pre class="p-4 m-0" style="font-family: monospace; font-size: 13px; color: #e6edf3; white-space: pre-wrap; line-height: 1.7; min-height: 400px;">{{ report.hosts }}</pre>
+            {% else %}
+                <div class="text-center py-5" style="color: #484f58; font-size: 13px;">
+                    <i class="fas fa-map-marker-alt d-block mb-3" style="font-size: 2rem;"></i>
+                    Awaiting IP / geo data...
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Vulnerabilities Modal -->
+ <div id="modal-owasp" class="rv-fullscreen-overlay" onclick="closeModalOutside(event, 'modal-owasp')">
+    <div class="rv-fullscreen-modal">
+        <div class="rv-fullscreen-header">
+            <span style="color: #d29922;"><i class="fas fa-shield-alt me-2"></i>OWASP Top 10</span>
+            <button class="rv-close-btn" onclick="closeModal('modal-owasp')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="rv-fullscreen-content" style="min-height: 400px;">
+            {% if report and report.vulnerabilities and report.vulnerabilities != "..." %}
+                {% set ns = namespace(found=false) %}
+                {% for vuln in report.vulnerabilities.split('\n') %}
+                    {% set line = vuln.strip() %}
+                    {% if line and '[OWASP' in line %}
+                        {% set ns.found = true %}
+                        <div class="px-4 py-3" style="border-bottom: 1px solid rgba(255,255,255,0.04); border-left: 3px solid rgba(210,153,34,0.5); background: rgba(210,153,34,0.05); font-family: monospace; font-size: 13px; color: #d29922;">
+                            <i class="fas fa-shield-alt me-2" style="opacity: 0.7;"></i>{{ line }}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+                {% if not ns.found %}
+                    <div class="text-center py-5" style="color: #484f58; font-size: 13px;">No OWASP Top 10 mapping found.</div>
+                {% endif %}
+            {% else %}
+                <div class="text-center py-5" style="color: #484f58; font-size: 13px;">Awaiting OWASP mapping...</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div id="modal-vulns" class="rv-fullscreen-overlay" onclick="closeModalOutside(event, 'modal-vulns')">
+    <div class="rv-fullscreen-modal">
+        <div class="rv-fullscreen-header">
+            <span style="color: #f85149;"><i class="fas fa-bug me-2"></i>Vulnerabilities</span>
+            <button class="rv-close-btn" onclick="closeModal('modal-vulns')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="rv-fullscreen-content" style="min-height: 400px;">
+            {% if report and report.vulnerabilities and report.vulnerabilities != "..." %}
+                {% set ns = namespace(found=false) %}
+                {% for vuln in report.vulnerabilities.split('\n') %}
+                    {% set line = vuln.strip() %}
+                    {% if line and '[OWASP' not in line and '[+] OWASP TOP 10 MAPPING' not in line %}
+                        {% set ns.found = true %}
+                        <div class="px-4 py-3" style="border-bottom: 1px solid rgba(255,255,255,0.04); border-left: 3px solid rgba(248,81,73,0.5); background: rgba(248,81,73,0.04); font-family: monospace; font-size: 13px; color: #f85149;">
+                            <i class="fas fa-exclamation-triangle me-2" style="opacity: 0.7;"></i>{{ line }}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+                {% if not ns.found %}
+                    <div class="text-center py-5" style="color: #484f58; font-size: 13px;">No security flaws logged.</div>
+                {% endif %}
+            {% else %}
+                <div class="text-center py-5" style="color: #484f58; font-size: 13px;">No security flaws logged.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+
+<!-- OSINT Modal -->
+<div id="modal-osint" class="rv-fullscreen-overlay" onclick="closeModalOutside(event, 'modal-osint')">
+    <div class="rv-fullscreen-modal">
+        <div class="rv-fullscreen-header">
+            <span style="color: #d29922;"><i class="fas fa-fingerprint me-2"></i>OSINT</span>
+            <button class="rv-close-btn" onclick="closeModal('modal-osint')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="rv-fullscreen-content" style="background: rgba(13,17,23,0.8);">
+            <pre class="p-4 m-0" style="font-family: monospace; font-size: 13px; color: #d29922; white-space: pre-wrap; line-height: 1.7; min-height: 400px;">{{ report.osint if report else '...' }}</pre>
+        </div>
+    </div>
+</div>
+
+<!-- AI Params Modal -->
+<div id="modal-params" class="rv-fullscreen-overlay" onclick="closeModalOutside(event, 'modal-params')">
+    <div class="rv-fullscreen-modal">
+        <div class="rv-fullscreen-header">
+            <span style="color: #58a6ff;"><i class="fas fa-code me-2"></i>AI params</span>
+            <button class="rv-close-btn" onclick="closeModal('modal-params')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="rv-fullscreen-content" style="background: rgba(13,17,23,0.8);">
+            <pre class="p-4 m-0" style="font-family: monospace; font-size: 13px; color: #58a6ff; white-space: pre-wrap; line-height: 1.7; min-height: 400px;">{{ report.parameters if report else '...' }}</pre>
+        </div>
+    </div>
+</div>
+
+<!-- System Logs Modal - UPDATED WITH ID FOR RESPONSIVE CSS -->
+<div id="modal-logs" class="rv-fullscreen-overlay" onclick="closeModalOutside(event, 'modal-logs')">
+    <div class="rv-fullscreen-modal">
+        <div class="rv-fullscreen-header">
+            <span style="color: #8b949e;"><i class="fas fa-terminal me-2"></i>System logs</span>
+            <button class="rv-close-btn" onclick="closeModal('modal-logs')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="rv-fullscreen-content" style="background: #010409;">
+            <!-- ✅ NOW USING ID FOR CSS STYLING -->
+            <div id="system-logs-modal" class="p-4">
+                [INFO] ReconVault engine ready. Standing by for target.
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Progress Widget -->
+<div id="scan-progress-widget" class="d-none"
+    style="position: fixed; bottom: 28px; right: 28px; width: 320px; z-index: 9999;
+           background: rgba(13,17,23,0.96); backdrop-filter: blur(8px);
+           border: 1px solid rgba(88,166,255,0.2); border-radius: 10px;">
+    <div id="scan-progress-widget-handle" class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex align-items-center gap-2">
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: #58a6ff;"></div>
+            <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #58a6ff;">ReconVault active</span>
+        </div>
+        <button type="button" class="btn-close btn-close-white" style="font-size: 9px;"
+            onclick="document.getElementById('scan-progress-widget').classList.add('d-none')"></button>
+    </div>
+    <div class="p-3">
+        <div class="d-flex justify-content-between align-items-end mb-2">
+            <div>
+                <div style="font-size: 10px; color: #484f58; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Active session</div>
+                <div id="widget-target" style="font-family: monospace; font-size: 13px; font-weight: 600; color: #e6edf3;">None</div>
+            </div>
+            <div id="widget-percent" style="font-family: monospace; font-size: 1.5rem; font-weight: 600; color: #58a6ff; line-height: 1;">0%</div>
+        </div>
+        <div class="mb-3" style="height: 3px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden;">
+            <div id="widget-bar" style="height: 3px; background: #58a6ff; width: 0%; transition: width 0.5s ease; border-radius: 99px;"></div>
+        </div>
+        <div class="p-2 rounded-2 d-flex justify-content-between align-items-center" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
+            <span style="font-size: 11px; color: #484f58; font-family: monospace;">PID: <span id="widget-task-code">0x7F4...</span></span>
+            <p class="mb-0" id="overlay-status" style="font-size: 11px; color: #58a6ff; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;">Initializing engine...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" style="display: none; background: rgba(0,0,0,0.92); position: fixed; inset: 0; z-index: 10000; align-items: center; justify-content: center; flex-direction: column;">
+    <div class="spinner-border mb-3" role="status" style="color: #58a6ff;"></div>
+    <h5 class="fw-semibold mb-3" style="color: #58a6ff; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Kali engine processing...</h5>
+    <div class="progress w-25" style="height: 4px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden;">
+        <div id="progress-bar-fill" class="progress-bar bg-info progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+    </div>
+    <p class="mt-3" id="overlay-status-kali" style="color: #8b949e; font-size: 12px;">Synchronizing hardware handshake...</p>
+</div>
+
+<!-- Replace the scan complete modal with this one, styled like the delete modal in report.html -->
+
+
+
+<script>
+
+function parseHistoricalUrlsFromParametersText(raw) {
+    const text = raw || '';
+
+    const countMatch = text.match(/Collected URLs:\s*([0-9,]+)/i);
+    const collectedCount = countMatch ? countMatch[1] : null;
+
+    const sectionMatch = text.match(
+        /===\s*FULL URLS WITH PARAMETERS \(top 50\)\s*===([\s\S]*?)(?:\n===|\n\s*System logs|\s*$)/i
+    );
+
+    const urls = [];
+    if (sectionMatch && sectionMatch[1]) {
+        sectionMatch[1]
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => /^https?:\/\//i.test(line))
+            .forEach(line => urls.push(line));
+    }
+
+    return { collectedCount, urls };
+}
+
+function getAiParamsPre() {
+    // Most reliable: AI Params card is inside col-md-6 with title "AI Params"
+    const cards = Array.from(document.querySelectorAll('.col-md-6 .rounded-3'));
+    for (const card of cards) {
+        const title = card.querySelector('span');
+        if (title && /AI\s*Params/i.test(title.textContent || '')) {
+            const pre = card.querySelector('pre');
+            if (pre) return pre;
+        }
+    }
+
+    // fallback to modal params pre if available
+    const modalPre = document.querySelector('#modal-params pre');
+    if (modalPre) return modalPre;
+
+    return null;
+}
+
+function renderHistoricalUrlUi() {
+    const aiParamsPre = getAiParamsPre();
+    if (!aiParamsPre) return;
+
+    const raw = aiParamsPre.textContent || '';
+    const parsed = parseHistoricalUrlsFromParametersText(raw);
+
+    const badgeBtn = document.getElementById('historical-url-count-ui');
+    if (badgeBtn) {
+        badgeBtn.textContent = parsed.collectedCount
+            ? `Collected ${parsed.collectedCount} unique historical URLs.`
+            : 'Collected -- unique historical URLs.';
+    }
+
+    const preview = document.getElementById('historical-url-preview');
+    if (preview) {
+        if (!parsed.urls.length) {
+            preview.textContent = 'No historical URLs found in current AI Params output.';
+        } else {
+            preview.innerHTML = parsed.urls.slice(0, 20).map(u =>
+                `<div style="padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">${u}</div>`
+            ).join('');
+        }
+    }
+
+    const full = document.getElementById('historical-url-full-list');
+    if (full) {
+        full.textContent = parsed.urls.length ? parsed.urls.join('\n') : 'No historical URLs found.';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    renderHistoricalUrlUi();
+});
+
+
+
+
+function openModal(id) {
+    document.getElementById(id).classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    // Keep modal views in sync with the main panels at the moment you open them.
+    if (id === 'modal-logs') {
+        const mainLogs = document.getElementById('system-logs');
+        const modalLogs = document.getElementById('system-logs-modal');
+        if (mainLogs && modalLogs) modalLogs.innerHTML = mainLogs.innerHTML;
+    }
+    if (id === 'modal-terminal') {
+        const mainTerm = document.getElementById('terminalText');
+        const modalTerm = document.getElementById('terminalTextModal');
+        if (mainTerm && modalTerm) modalTerm.textContent = mainTerm.textContent;
+    }
+    
+}
+function closeModal(id) {
+    document.getElementById(id).classList.remove('active');
+    document.body.style.overflow = '';
+}
+function closeModalOutside(event, id) {
+    if (event.target === document.getElementById(id)) {
+        closeModal(id);
+    }
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.rv-fullscreen-overlay.active').forEach(function(el) {
+            el.classList.remove('active');
+        });
+        document.body.style.overflow = '';
+    }
+});
+let activeEventSource = null;
+
+async function stopScanning(mode = 'local') {
+    if (activeEventSource) {
+        activeEventSource.close();
+        activeEventSource = null;
+    }
+
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const widget = document.getElementById('scan-progress-widget');
+    const logs = document.getElementById('system-logs');
+    const logsModal = document.getElementById('system-logs-modal');
+    const terminal = document.getElementById('terminalText');
+    const terminalModal = document.getElementById('terminalTextModal');
+
+    if (startBtn) startBtn.classList.remove('d-none');
+    if (stopBtn) stopBtn.classList.add('d-none');
+    if (widget) widget.classList.add('d-none');
+
+    if (logs) {
+        logs.innerHTML += '<br>[WARN] Stop request sent by user.';
+        logs.scrollTop = logs.scrollHeight;
+    }
+
+    if (logsModal) logsModal.innerHTML += '<br>[WARN] Stop request sent by user.';
+    if (terminal) terminal.textContent += '\n[!] Stop request sent by user.';
+    if (terminalModal) terminalModal.textContent += '\n[!] Stop request sent by user.';
+
+    updateKaliPanel('Idle', 'Scan stop requested. Waiting for backend cleanup.');
+
+    try {
+        if (mode === 'remote') {
+            await fetch('/api/stop_kali_scan', { method: 'POST' });
+        }
+    } catch (err) {
+        console.error('Stop request failed:', err);
+    }
+}
+
+</script>
+
+{% endblock %}
+
+
+
+{% block scripts %}
+<script>
+/**
+ * ── RECONVAULT DICTIONARY HANDLER (HX-NB Edition) ──
+ * Specifically optimized for your local wordlist repository.
+ */
+let displayedProgress = 0;
+
+function animateProgress(targetProgress) {
+    const widgetBar = document.getElementById('widget-bar');
+    const widgetPercent = document.getElementById('widget-percent');
+    const progressBarFill = document.getElementById('progress-bar-fill');
+
+    targetProgress = Math.max(displayedProgress, Number(targetProgress) || 0);
+
+    const step = () => {
+        if (displayedProgress < targetProgress) {
+            displayedProgress += 1;
+
+            if (widgetPercent) widgetPercent.textContent = displayedProgress + "%";
+            if (widgetBar) widgetBar.style.width = displayedProgress + "%";
+            if (progressBarFill) progressBarFill.style.width = displayedProgress + "%";
+
+            requestAnimationFrame(step);
+        }
+    };
+
+    requestAnimationFrame(step);
+}
+
+
+document.addEventListener('DOMContentLoaded', function() {
+        renderHistoricalUrlUi();
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetFromUrl = urlParams.get('target') || '';
+
+    const mainInput = document.getElementById('targetInput');
+    const modalInput = document.getElementById('targetInputModal');
+
+    if (targetFromUrl) {
+        if (mainInput) {
+            mainInput.value = targetFromUrl;
+        }
+        if (modalInput) {
+            modalInput.value = targetFromUrl;
+        }
+    }
+
+    if (mainInput && modalInput) {
+        modalInput.value = mainInput.value || targetFromUrl || '';
+
+        mainInput.addEventListener('input', function() {
+            modalInput.value = mainInput.value;
+        });
+
+        modalInput.addEventListener('input', function() {
+            mainInput.value = modalInput.value;
+        });
+    }
+});
+
+
+
+
+const subdomainsCheck = document.getElementById('mod_subdomains');
+const dictPicker      = document.getElementById('dict-picker');
+const dictSelect      = document.getElementById('dict-select');
+const dictInfo        = document.getElementById('dict-info');
+
+// ── Show/Hide Logic ──
+function toggleDictPicker() {
+    if (!dictPicker || !subdomainsCheck) return;
+    dictPicker.style.display = subdomainsCheck.checked ? 'block' : 'none';
+}
+
+// ── Load available dicts from Flask API ──
+async function loadDictionaries() {
+    if (!dictSelect || !dictInfo) return;
+
+    try {
+        dictInfo.innerHTML = '<i class="fas fa-sync fa-spin me-1"></i> Scanning HX-NB dictionary folder...';
+        
+        const res  = await fetch('/api/v1/dictionaries');
+        const data = await res.json();
+        
+        if (data.dictionaries && data.dictionaries.length > 0) {
+            dictSelect.innerHTML = ''; 
+            
+            data.dictionaries.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.filename;
+                
+                // Add short descriptions based on your file names
+                let label = d.label;
+                if (d.filename.includes('seclists')) label += " (Industry Standard)";
+                if (d.filename.includes('deepmagic')) label += " (Aggressive)";
+                if (d.filename.includes('big') || d.filename.includes('110k')) label += " [HEAVY]";
+                
+                opt.textContent = label;
+
+                // Default selection
+                if (d.filename === 'dns_list.txt') opt.selected = true;
+                dictSelect.appendChild(opt);
+            });
+            
+            updateInfoText(); // Set initial info
+        } else {
+            dictInfo.innerHTML = '<i class="fas fa-exclamation-triangle text-warning me-1"></i> No .txt files found in HX-NB modules/dictionary.';
+        }
+    } catch (e) {
+        dictInfo.innerHTML = '<i class="fas fa-times-circle text-danger me-1"></i> Error connecting to ReconVault core.';
+    }
+}
+
+// ── Visual Feedback on Selection ──
+function updateInfoText() {
+    const selected = dictSelect.options[dictSelect.selectedIndex].text;
+    const filename = dictSelect.value;
+    
+    let meta = "Standard discovery";
+    if (filename.includes('110k') || filename.includes('big')) meta = "Deep discovery (Slow)";
+    if (filename.includes('5k') || filename.includes('500')) meta = "Quick surface scan (Fast)";
+
+    dictInfo.innerHTML = `<i class="fas fa-info-circle text-primary me-1"></i> <b>Mode:</b> ${meta}`;
+}
+
+// ── Event Listeners ──
+if (subdomainsCheck) subdomainsCheck.addEventListener('change', toggleDictPicker);
+if (dictSelect) dictSelect.addEventListener('change', updateInfoText);
+
+document.addEventListener('DOMContentLoaded', () => {
+    toggleDictPicker();
+    loadDictionaries();
+});
+
+
+
+    // --- GLOBAL VARIABLES FOR UI ---
+    const logBox = document.getElementById('system-logs');
+    const logBoxModal = document.getElementById('system-logs-modal');
+    const overlay = document.getElementById('loading-overlay');
+    const overlayStatus = document.getElementById('overlay-status');
+    const progressBarFill = document.getElementById('progress-bar-fill');
+    const widget = document.getElementById('scan-progress-widget');
+    const widgetTarget = document.getElementById('widget-target');
+    const widgetPercent = document.getElementById('widget-percent');
+    const kaliSshState = document.getElementById('kali-ssh-state');
+    const kaliSshSummary = document.getElementById('kali-ssh-summary');
+
+    // Show the Kali Engine toggle only for Deep scan (full). Fast scan keeps it hidden.
+    const kaliEngineToggle = document.getElementById('kali-engine-toggle');
+    const fastModeRadio = document.getElementById('fast');
+    const fullModeRadio = document.getElementById('full');
+    const useKaliFullSwitch = document.getElementById('useKaliFull');
+    const rootEl = document.getElementById('rv-scan-root');
+    const kaliHost = rootEl?.dataset?.kaliHost || '192.168.100.250';
+    const kaliUser = rootEl?.dataset?.kaliUser || 'kali';
+    const kaliInlineStatus = document.getElementById('kali-ssh-inline-status');
+
+    function syncKaliEngineToggle() {
+        if (!kaliEngineToggle) return;
+        const isDeep = fullModeRadio && fullModeRadio.checked;
+        kaliEngineToggle.classList.toggle('d-none', !isDeep);
+    }
+
+    function setKaliInlineStatus(state) {
+        if (!kaliInlineStatus) return;
+
+        if (state === 'connecting') {
+            kaliInlineStatus.textContent = 'Connecting';
+            kaliInlineStatus.style.background = 'rgba(88,166,255,0.12)';
+            kaliInlineStatus.style.border = '1px solid rgba(88,166,255,0.28)';
+            kaliInlineStatus.style.color = '#58a6ff';
+            return;
+        }
+
+        if (state === 'connected') {
+            kaliInlineStatus.textContent = 'Connected';
+            kaliInlineStatus.style.background = 'rgba(63,185,80,0.12)';
+            kaliInlineStatus.style.border = '1px solid rgba(63,185,80,0.26)';
+            kaliInlineStatus.style.color = '#3fb950';
+            return;
+        }
+
+        // disconnected
+        kaliInlineStatus.textContent = 'Disconnected';
+        kaliInlineStatus.style.background = 'rgba(248,81,73,0.10)';
+        kaliInlineStatus.style.border = '1px solid rgba(248,81,73,0.26)';
+        kaliInlineStatus.style.color = '#f85149';
+    }
+
+    let kaliHealthCheckId = 0;
+    async function checkKaliSshHealth() {
+        if (!useKaliFullSwitch || !useKaliFullSwitch.checked) return;
+
+        const checkId = ++kaliHealthCheckId;
+        setKaliInlineStatus('connecting');
+
+        try {
+            const res = await fetch('/api/kali/health', { method: 'GET', cache: 'no-store' });
+            const data = await res.json();
+
+            // Ignore stale responses if user toggled quickly.
+            if (checkId !== kaliHealthCheckId) return;
+            if (!useKaliFullSwitch.checked) return;
+
+            if (data && data.ok === true) {
+                setKaliInlineStatus('connected');
+                appendLogToPanels(`[SSH] Connected to ${kaliUser}@${kaliHost}.`, 'text-success');
+            } else {
+                setKaliInlineStatus('disconnected');
+                const reason = (data && data.error) ? ` (${data.error})` : '';
+                appendLogToPanels(`[SSH] Connection failed to ${kaliUser}@${kaliHost}.${reason}`, 'text-danger');
+            }
+        } catch (e) {
+            if (checkId !== kaliHealthCheckId) return;
+            setKaliInlineStatus('disconnected');
+            appendLogToPanels(`[SSH] Connection error to ${kaliUser}@${kaliHost}. (${e})`, 'text-danger');
+        }
+    }
+
+    // Run immediately (script is near end of page), and also react to user changes.
+    syncKaliEngineToggle();
+    if (fastModeRadio) fastModeRadio.addEventListener('change', syncKaliEngineToggle);
+    if (fullModeRadio) fullModeRadio.addEventListener('change', syncKaliEngineToggle);
+
+    if (useKaliFullSwitch) {
+        // Initialize status based on current toggle state.
+        setKaliInlineStatus(useKaliFullSwitch.checked ? 'connecting' : 'disconnected');
+        if (useKaliFullSwitch.checked) checkKaliSshHealth();
+
+        useKaliFullSwitch.addEventListener('change', () => {
+            if (useKaliFullSwitch.checked) {
+                appendLogToPanels(`[SSH] Kali Engine enabled. Ready to connect to ${kaliUser}@${kaliHost}.`, 'text-success');
+                checkKaliSshHealth();
+            } else {
+                appendLogToPanels('[SSH] Kali Engine disabled. Disconnected (Local WSL mode).', 'text-danger');
+                setKaliInlineStatus('disconnected');
+            }
+        });
+    }
+
+        function appendLogToPanels(message, className = 'text-info') {
+            if (logBox) {
+                const logEntry = document.createElement('div');
+                logEntry.className = `log-entry ${className}`.trim();
+                logEntry.textContent = message;
+                logBox.appendChild(logEntry);
+                logBox.scrollTop = logBox.scrollHeight;
+            }
+
+            if (logBoxModal) {
+                const modalEntry = document.createElement('div');
+                modalEntry.className = `log-entry ${className}`.trim();
+                modalEntry.textContent = message;
+                logBoxModal.appendChild(modalEntry);
+                logBoxModal.scrollTop = logBoxModal.scrollHeight;
+            }
+        }
+
+        function updateKaliPanel(state, message) {
+            if (kaliSshState) {
+                kaliSshState.textContent = state;
+                const isActive = state === 'Streaming' || state === 'Connected';
+                const isError = state === 'Offline' || state === 'Error';
+                kaliSshState.style.color = isActive ? '#f85149' : (isError ? '#ff7b72' : '#8b949e');
+                kaliSshState.style.borderColor = isActive ? 'rgba(248,81,73,0.28)' : (isError ? 'rgba(255,123,114,0.28)' : 'rgba(255,255,255,0.08)');
+                kaliSshState.style.background = isActive ? 'rgba(248,81,73,0.12)' : (isError ? 'rgba(255,123,114,0.10)' : 'rgba(255,255,255,0.06)');
+            }
+
+            if (kaliSshSummary && message) {
+                kaliSshSummary.textContent = message;
+            }
+        }
+
+        async function startRemoteKaliScan() {
+            const targetInput = document.getElementById('targetInput');
+            const target = targetInput.value.trim();
+            
+            // UI Selectors
+            const widget = document.getElementById('scan-progress-widget');
+            const widgetTarget = document.getElementById('widget-target');
+            const widgetPercent = document.getElementById('widget-percent');
+            const widgetBar = document.getElementById('widget-bar');
+            const overlayStatus = document.getElementById('overlay-status');
+            const terminalText = document.getElementById('terminalText');
+            const terminalTextModal = document.getElementById('terminalTextModal');
+            const scanOutput = document.getElementById('scanOutput');
+
+            if (!target) return alert("Please enter a target domain for the Kali Engine.");
+            updateKaliPanel('Connected', `Opening SSH session to {{ kali_user or 'kali' }}@{{ kali_host or '192.168.100.250' }} for ${target}...`);
+            appendLogToPanels(`[SSH] Remote Kali session requested for ${target}`, 'text-danger');
+
+            // 1. Prepare UI for Remote HUD
+            if(widget) {
+                widget.classList.remove('d-none');
+                widgetTarget.textContent = target;
+                // Generate a cool "Task Code" for the professional look
+                document.getElementById('widget-task-code').textContent = '0x' + Math.random().toString(16).slice(2, 8).toUpperCase();
+            }
+            
+            // Show terminal for remote logs
+            if(scanOutput) scanOutput.classList.remove('d-none');
+            if(terminalText) terminalText.textContent = `[SYSTEM] Initiating SSH Tunnel to Kali Hardware ({{ kali_host or '192.168.100.250' }})...\n`;
+            if(terminalTextModal) terminalTextModal.textContent = `[SYSTEM] Initiating SSH Tunnel to Kali Hardware ({{ kali_host or '192.168.100.250' }})...\n`;
+
+            // 2. Start the Remote SSE Stream
+            // We pass the same parameters but to the stream_kali_recon endpoint
+            window.currentScanMode = 'remote';
+                document.getElementById('start-btn')?.classList.add('d-none');
+                document.getElementById('stop-btn')?.classList.remove('d-none');
+            const THREAT_ALERTS_ENABLED =
+            document.getElementById('rv-scan-root')?.dataset?.threatAlerts === '1';
+            const dictFile = document.getElementById('dict-select')?.value || 'dns_list.txt';
+            const modules = 'osint,subdomains,hosts,web,paramining,vulns';
+            const eventSource = new EventSource(
+            `/stream_kali_recon?target=${encodeURIComponent(target)}&mode=full&modules=${encodeURIComponent(modules)}&dict_file=${encodeURIComponent(dictFile)}`
+            );
+            activeEventSource = eventSource;
+            updateKaliPanel('Streaming', `SSH stream active for ${target}. Waiting for telemetry from /stream_kali_recon...`);
+        
+
+            // templates/scanTarget.html (SSH panel stream inside startRemoteKaliScan())
+// REPLACE your whole eventSource.onmessage block with this:
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+
+                // Update Terminal
+                if (terminalText) {
+                    terminalText.textContent += `> [${data.progress ?? 0}%] ${data.log}\n`;
+                    terminalText.parentElement.scrollTop = terminalText.parentElement.scrollHeight;
+                }
+                if (terminalTextModal) {
+                    terminalTextModal.textContent += `> ${data.log}\n`;
+                    terminalTextModal.parentElement.scrollTop = terminalTextModal.parentElement.scrollHeight;
+                }
+
+                appendLogToPanels(data.log, data.log.includes('[CRITICAL]') ? 'text-danger' : 'text-info');
+
+                // Update HUD Widget
+                if (overlayStatus) overlayStatus.textContent = data.log;
+
+                // Progress: always update (even 0) using your smooth animator
+                if (data.progress !== undefined && data.progress !== null) {
+                    animateProgress(data.progress);
+                }
+
+                updateKaliPanel('Streaming', data.log);
+
+                if (data.log.includes('[DONE]')) {
+                    eventSource.close();
+                    activeEventSource = null;
+                    document.getElementById('start-btn')?.classList.remove('d-none');
+                    document.getElementById('stop-btn')?.classList.add('d-none');
+                    window.currentScanMode = null;
+
+                    updateKaliPanel('Idle', `Last SSH recon for ${target} completed successfully.`);
+
+                    localStorage.setItem('recon_complete_signal', JSON.stringify({
+                        target: target,
+                        time: Date.now()
+                    }));
+
+                    if (overlayStatus) overlayStatus.innerHTML = "<span class='text-success fw-bold'>KALI SCAN COMPLETE</span>";
+
+                    showScanCompleteModal(target, 'PC Kali (SSH)');
+                }
+            };
+
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource Error:", err);
+                eventSource.close();
+                activeEventSource = null;
+                document.getElementById('start-btn')?.classList.remove('d-none');
+                document.getElementById('stop-btn')?.classList.add('d-none');
+                window.currentScanMode = null;
+                updateKaliPanel('Offline', `SSH stream to {{ kali_host or '192.168.100.250' }} failed or was interrupted.`);
+                appendLogToPanels('[ERROR] SSH stream interrupted. Check Kali PC connectivity.', 'text-danger');
+                if(overlayStatus) overlayStatus.innerHTML = "<span class='text-danger'>[!] KALI HARDWARE TIMEOUT</span>";
+                alert("Connection to Kali Hardware lost. Check if the PC at 192.168.100.250 is online.");
+            };
+        }
+        
+    // Helper function to stop the scan and show error
+    function handleScanError(message, source) {
+        if(source) source.close();
+        if(progressBarFill) progressBarFill.style.backgroundColor = "#ff4444"; 
+        if(overlayStatus) overlayStatus.innerHTML = `<span class='text-danger'>${message}</span>`;
+        
+        const errorLog = document.createElement('div');
+        errorLog.className = 'log-entry text-danger fw-bold';
+        errorLog.textContent = `!! [ERROR] ${message}`;
+        if(logBox) logBox.appendChild(errorLog);
+    }
+
+    // --- ELEMENT SELECTORS & UI LOGIC ---
+    const fastRadio = document.getElementById('fast');
+    const fullRadio = document.getElementById('full');
+    const modulePanel = document.getElementById('module-selection');
+    const toggleAll = document.getElementById('toggle-all');
+    const moduleCheckboxes = document.querySelectorAll('.module-checkbox');
+    const form = document.getElementById('reconForm');
+
+
+    function toggleModules() {
+        if (fullRadio && fullRadio.checked) {
+            if(modulePanel) modulePanel.classList.remove('d-none');
+        } else if (modulePanel) {
+            modulePanel.classList.add('d-none');
+        }
+    }
+
+    if (fastRadio) fastRadio.addEventListener('change', toggleModules);
+    if (fullRadio) fullRadio.addEventListener('change', toggleModules);
+    document.addEventListener('DOMContentLoaded', toggleModules);
+
+    // Layout:
+    // Deep scan: keep secondary panels (Host/Vuln/OWASP + OSINT/AI + Logs) inside the right column.
+    // Fast scan: render a compact "second line" layout:
+    //   Row 1: Host | OSINT | AI
+    //   Row 2: Vuln | OWASP
+    // using the existing FAST slots, without changing any scan logic.
+    function syncFastDeepLayout() {
+        const secondary = document.getElementById('rv-secondary-panels');
+        const rightAnchor = document.getElementById('rv-right-anchor');
+        if (secondary && rightAnchor && secondary.parentElement !== rightAnchor) {
+            rightAnchor.appendChild(secondary);
+        }
+
+        const leftAnchor = document.getElementById('rv-left-anchor');
+        const fullwidthAnchor = document.getElementById('rv-fullwidth-anchor');
+        const fastLayout = document.getElementById('rv-fast-left-layout');
+
+        const hvo = document.getElementById('rv-hvo-panels');
+        const osaiRow = document.getElementById('rv-osai-row');
+        const logsPanel = document.getElementById('rv-logs-panel');
+
+        const hostCol = document.getElementById('rv-host-col');
+        const vulnCol = document.getElementById('rv-vuln-col');
+        const owaspCol = document.getElementById('rv-owasp-col');
+        const osintCol = document.getElementById('rv-osint-col');
+        const aiCol = document.getElementById('rv-ai-col');
+
+        const slotHost = document.getElementById('rv-fast-slot-host');
+        const slotOsint = document.getElementById('rv-fast-slot-osint');
+        const slotAi = document.getElementById('rv-fast-slot-ai');
+        const slotVuln = document.getElementById('rv-fast-slot-vuln');
+        const slotOwasp = document.getElementById('rv-fast-slot-owasp');
+
+        if (!leftAnchor || !fullwidthAnchor || !fastLayout) return;
+        if (!hvo || !osaiRow) return;
+        if (!logsPanel) return;
+        if (!hostCol || !vulnCol || !owaspCol || !osintCol || !aiCol) return;
+        if (!slotHost || !slotOsint || !slotAi || !slotVuln || !slotOwasp) return;
+
+        // Capture original DOM positions once so we can restore cleanly.
+        if (!window.__rvOriginalPanelPositions) {
+            window.__rvOriginalPanelPositions = {
+                host: { el: hostCol, parent: hostCol.parentNode, next: hostCol.nextSibling },
+                vuln: { el: vulnCol, parent: vulnCol.parentNode, next: vulnCol.nextSibling },
+                owasp:{ el: owaspCol, parent: owaspCol.parentNode, next: owaspCol.nextSibling },
+                osint:{ el: osintCol, parent: osintCol.parentNode, next: osintCol.nextSibling },
+                ai:   { el: aiCol, parent: aiCol.parentNode, next: aiCol.nextSibling },
+                logs: { el: logsPanel, parent: logsPanel.parentNode, next: logsPanel.nextSibling },
+                fastLayoutHome: { el: fastLayout, parent: fastLayout.parentNode, next: fastLayout.nextSibling }
+            };
+        }
+
+        const isFast = !!(fastRadio && fastRadio.checked);
+
+        const moveToSlot = (el, slot) => {
+            if (!el || !slot) return;
+            if (el.parentNode !== slot) slot.appendChild(el);
+            el.classList.add('rv-fast-panel');
+        };
+
+        const restore = (key) => {
+            const pos = window.__rvOriginalPanelPositions && window.__rvOriginalPanelPositions[key];
+            if (!pos || !pos.el || !pos.parent) return;
+
+            pos.el.classList.remove('rv-fast-panel');
+
+            // If the saved "next" sibling is still under the same parent, restore before it.
+            if (pos.next && pos.next.parentNode === pos.parent) {
+                pos.parent.insertBefore(pos.el, pos.next);
+                return;
+            }
+            pos.parent.appendChild(pos.el);
+        };
+
+        if (isFast) {
+            // FAST mode: render the compact 2-row layout as a full-width section:
+            //   Host | OSINT | AI
+            //   Vuln | OWASP
+            if (fastLayout.parentNode !== fullwidthAnchor) {
+                fullwidthAnchor.appendChild(fastLayout);
+            }
+
+            fastLayout.classList.remove('d-none');
+
+            // Hide original containers to avoid blank rows in the right column.
+            hvo.classList.add('d-none');
+            osaiRow.classList.add('d-none');
+
+            // Move panels into FAST slots.
+            moveToSlot(hostCol, slotHost);
+            moveToSlot(osintCol, slotOsint);
+            moveToSlot(aiCol, slotAi);
+            moveToSlot(vulnCol, slotVuln);
+            moveToSlot(owaspCol, slotOwasp);
+
+            // Put logs under the FAST section so the page reads cleanly in FAST mode.
+            if (logsPanel.parentNode !== fullwidthAnchor) {
+                fullwidthAnchor.appendChild(logsPanel);
+            }
+        } else {
+            // Restore FAST layout container to its original home and hide it.
+            const home = window.__rvOriginalPanelPositions.fastLayoutHome;
+            if (home && home.parent && fastLayout.parentNode !== home.parent) {
+                if (home.next && home.next.parentNode === home.parent) {
+                    home.parent.insertBefore(fastLayout, home.next);
+                } else {
+                    home.parent.appendChild(fastLayout);
+                }
+            }
+
+            fastLayout.classList.add('d-none');
+
+            // Unhide original containers and restore panels.
+            hvo.classList.remove('d-none');
+            osaiRow.classList.remove('d-none');
+
+            restore('host');
+            restore('vuln');
+            restore('owasp');
+            restore('osint');
+            restore('ai');
+            restore('logs');
+        }
+
+        // Heights depend on where panels are placed and can change when toggling modes.
+        if (typeof syncTopPanelHeights === 'function') {
+            setTimeout(syncTopPanelHeights, 0);
+        }
+    }
+
+    if (fastRadio) fastRadio.addEventListener('change', syncFastDeepLayout);
+    if (fullRadio) fullRadio.addEventListener('change', syncFastDeepLayout);
+    document.addEventListener('DOMContentLoaded', syncFastDeepLayout);
+
+    // Keep Network Map + Web Services the same height as the left stack (Scan Config + Malware) on desktop.
+    // This is layout-only: it doesn't affect scan logic.
+    function syncTopPanelHeights() {
+        const scanConfig = document.getElementById('rv-scan-config-panel');
+        const malware = document.getElementById('rv-malware-panel');
+        const networkPanel = document.getElementById('rv-network-panel');
+        const webPanel = document.getElementById('rv-web-panel');
+        const networkBody = document.getElementById('rv-network-body');
+        const webBody = document.getElementById('rv-web-body');
+
+        if (!scanConfig || !malware || !networkPanel || !webPanel || !networkBody || !webBody) return;
+
+        // Preserve the template's default body heights so we can restore them when leaving FAST mode.
+        if (!networkBody.dataset.rvDefaultHeight) {
+            networkBody.dataset.rvDefaultHeight = networkBody.style.height || '380px';
+        }
+        if (!webBody.dataset.rvDefaultHeight) {
+            webBody.dataset.rvDefaultHeight = webBody.style.height || '380px';
+        }
+
+        const restoreDefaults = () => {
+            networkPanel.style.height = '';
+            webPanel.style.height = '';
+            networkBody.style.height = networkBody.dataset.rvDefaultHeight;
+            webBody.style.height = webBody.dataset.rvDefaultHeight;
+        };
+
+        // Only apply in FAST scan. Deep scan keeps natural heights.
+        const isFastMode = !!(fastRadio && fastRadio.checked);
+        if (!isFastMode) {
+            restoreDefaults();
+            return;
+        }
+
+        // Only apply on desktop-like widths. Mobile/tablet should naturally stack.
+        if (window.innerWidth < 992) {
+            restoreDefaults();
+            return;
+        }
+
+        const top = scanConfig.getBoundingClientRect().top;
+        const bottom = malware.getBoundingClientRect().bottom;
+        const desired = Math.max(480, Math.round(bottom - top));
+
+        // Apply outer height.
+        networkPanel.style.height = `${desired}px`;
+        webPanel.style.height = `${desired}px`;
+
+        // Apply inner body heights (subtract header heights).
+        const netHeader = networkPanel.firstElementChild;
+        const webHeader = webPanel.firstElementChild;
+        const netHeaderH = netHeader ? netHeader.getBoundingClientRect().height : 0;
+        const webHeaderH = webHeader ? webHeader.getBoundingClientRect().height : 0;
+
+        networkBody.style.height = `${Math.max(200, desired - netHeaderH)}px`;
+        webBody.style.height = `${Math.max(200, desired - webHeaderH)}px`;
+    }
+
+    window.addEventListener('resize', syncTopPanelHeights);
+    document.addEventListener('DOMContentLoaded', syncTopPanelHeights);
+
+    if (toggleAll) {
+        toggleAll.addEventListener('change', function() {
+            moduleCheckboxes.forEach(checkbox => { checkbox.checked = toggleAll.checked; });
+        });
+    }
+
+        // --- NORMAL WSL SCAN FORM ---
+    if(form) {
+        form.onsubmit = async function(e) {
+            e.preventDefault(); 
+            const formData = new FormData(form);
+            const target = formData.get('target');
+            const mode = formData.get('scan_mode');
+
+            // In FAST mode, always send the lightweight module set so UI/logs match the FAST profile.
+            const modules = (mode === 'fast')
+            ? 'subdomains,web,paramining,vulns'
+            : Array.from(formData.getAll('modules')).join(',');
+
+            const dictFile = document.getElementById('dict-select')?.value || 'dns_list.txt';
+
+
+            console.log(`[DEBUG] Form submitted: target=${target}, mode=${mode}, dict=${dictFile}, modules=${modules}`);
+
+            if(overlay) overlay.style.display = 'none'; 
+            if(widget) {
+                widget.classList.remove('d-none');
+                widgetTarget.textContent = target;
+            }
+
+            const useKaliFull = (mode === 'full') && (document.getElementById('useKaliFull')?.checked === true);
+            const engineLabel = useKaliFull ? 'PC Kali (SSH)' : 'Local WSL';
+
+            if (logBox) {
+                logBox.innerHTML = `<div class='log-entry text-info'>[SYSTEM] Initializing ${engineLabel} Engine with wordlist: ${dictFile}...</div>`;
+            }
+
+            // ← ADD dictFile PARAMETER HERE
+           // templates/scanTarget.html
+// REPLACE your current `const url = ...` and `window.currentScanMode = ...` block with this:
+
+
+            const url = useKaliFull
+                ? `/stream_kali_recon?target=${encodeURIComponent(target)}&mode=${mode}&modules=${encodeURIComponent(modules)}&dict_file=${encodeURIComponent(dictFile)}`
+                : `/stream_recon?target=${encodeURIComponent(target)}&mode=${mode}&modules=${encodeURIComponent(modules)}&dict_file=${encodeURIComponent(dictFile)}`;
+
+            console.log(`[DEBUG] EventSource URL: ${url}`);
+            window.currentScanMode = useKaliFull ? 'remote' : 'local';
+            document.getElementById('start-btn')?.classList.add('d-none');
+            document.getElementById('stop-btn')?.classList.remove('d-none');
+
+            const THREAT_ALERTS_ENABLED =
+                document.getElementById('rv-scan-root')?.dataset?.threatAlerts === '1';
+
+            const eventSource = new EventSource(url);
+            activeEventSource = eventSource;
+
+           // templates/scanTarget.html (LOCAL WSL + Kali-toggle stream)
+            // REPLACE your whole eventSource.onmessage block with this:
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+
+                let className = 'text-info';
+                if (THREAT_ALERTS_ENABLED) {
+                    const isThreat =
+                        /\[(critical|high)\]/i.test(data.log) ||
+                        data.log.includes("[OWASP") ||
+                        data.log.startsWith("[!]");
+                    if (isThreat) className = 'text-danger fw-semibold';
+                }
+
+                appendLogToPanels(data.log, className);
+
+                if (overlayStatus) overlayStatus.textContent = data.log;
+
+                // Progress: always update (even 0) using your smooth animator
+                if (data.progress !== undefined && data.progress !== null) {
+                    animateProgress(data.progress);
+                }
+
+                if (data.log.includes('[DONE]') || data.log.includes('DB Save Success')) {
+                    localStorage.setItem('recon_complete_signal', JSON.stringify({
+                        target: target,
+                        modeLabel: engineLabel,
+                        time: Date.now()
+                    }));
+
+                    eventSource.close();
+                    activeEventSource = null;
+                    document.getElementById('start-btn')?.classList.remove('d-none');
+                    document.getElementById('stop-btn')?.classList.add('d-none');
+                    window.currentScanMode = null;
+
+                    showScanCompleteModal(target, engineLabel);
+                }
+            };
+
+
+            eventSource.onerror = function() {
+                eventSource.close();
+                activeEventSource = null;
+                document.getElementById('start-btn')?.classList.remove('d-none');
+                document.getElementById('stop-btn')?.classList.add('d-none');
+                window.currentScanMode = null;
+                if(widget) widget.classList.add('d-none');
+                alert("Connection to ReconVault Engine lost.");
+            };
+            
+        };
+    }
+
+    // --- UTILITIES ---
+    document.addEventListener("DOMContentLoaded", function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const target = urlParams.get('target');
+        if (target) {
+            const input = document.getElementById('targetInput');
+            if(input) {
+                input.style.border = "2px solid #00d4ff";
+                input.focus();
+                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        if (Notification.permission !== "granted") {
+            Notification.requestPermission();
+        }
+    });
+
+</script>
+{% endblock %}

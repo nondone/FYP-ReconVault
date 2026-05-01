@@ -1,0 +1,372 @@
+{% extends "base.html" %}
+
+{% block title %}Settings{% endblock %}
+
+{% block extra_css %} {% endblock %}
+
+{% block content %}
+<div class="settings-wrapper">
+    <div class="settings-hero">
+        <h2><i class="fas fa-cog me-2"></i>Settings</h2>
+        <p>Configure operator preferences, scan behavior, and connected intelligence services. Every control below saves into your existing settings flow.</p>
+    </div>
+
+    <div id="success-alert" class="alert-success-custom">
+        <i class="fas fa-check-circle me-2"></i>Settings saved successfully.
+    </div>
+
+    <div id="error-alert" class="alert-error-custom">
+        <i class="fas fa-triangle-exclamation me-2"></i><span id="error-text">Unable to save settings.</span>
+    </div>
+
+    <form id="settingsForm">
+        <div class="settings-grid">
+            <div class="settings-stack">
+                <div class="settings-card">
+                    <div class="card-title"><i class="fas fa-sliders-h"></i>General Settings</div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-moon"></i></div>
+                            <div>
+                                <span class="settings-label">Theme Mode</span>
+                                <span class="settings-desc">Toggle the interface theme used across the control panel.</span>
+                            </div>
+                        </div>
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox" name="theme_mode" {% if settings.theme_mode %}checked{% endif %} onchange="saveSettings()">
+                        </div>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-globe"></i></div>
+                            <div>
+                                <span class="settings-label">Language</span>
+                                <span class="settings-desc">Choose the interface language used in the UI.</span>
+                            </div>
+                        </div>
+                        <select class="lang-select" name="language" onchange="saveSettings()">
+                            <option value="English" {% if settings.language == 'English' %}selected{% endif %}>English</option>
+                            <option value="Spanish" {% if settings.language == 'Spanish' %}selected{% endif %}>Spanish</option>
+                            <option value="Mandarin" {% if settings.language == 'Mandarin' %}selected{% endif %}>Mandarin</option>
+                        </select>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-bell"></i></div>
+                            <div>
+                                <span class="settings-label">Notifications</span>
+                                <span class="settings-desc">Enable in-browser alerts and completion notifications.</span>
+                            </div>
+                        </div>
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox" name="notifications" {% if settings.notifications %}checked{% endif %} onchange="saveSettings()">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-card">
+                    <div class="card-title"><i class="fas fa-shield-alt"></i>Security & Scan Configuration</div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-crosshairs"></i></div>
+                            <div>
+                                <span class="settings-label">Auto Scan</span>
+                                <span class="settings-desc">Automatically trigger scanning flows for new targets.</span>
+                            </div>
+                        </div>
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox" name="auto_scan" {% if settings.auto_scan %}checked{% endif %} onchange="saveSettings()">
+                        </div>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-lock"></i></div>
+                            <div>
+                                <span class="settings-label">SSL Verification</span>
+                                <span class="settings-desc">Verify certificates during requests where supported.</span>
+                            </div>
+                        </div>
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox" name="ssl_verification" {% if settings.ssl_verification %}checked{% endif %} onchange="saveSettings()">
+                        </div>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-exclamation-circle"></i></div>
+                            <div>
+                                <span class="settings-label">Threat Alerts</span>
+                                <span class="settings-desc">Show alerts when scans identify notable security issues.</span>
+                            </div>
+                        </div>
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox" name="threat_alerts" {% if settings.threat_alerts %}checked{% endif %} onchange="saveSettings()">
+                        </div>
+                    </div>
+
+                    <!-- templates/settings.html (Data Encryption row) -->
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-lock"></i></div>
+                            <div>
+                                <span class="settings-label">Data Encryption</span>
+                                <span class="settings-desc">Mark vault data storage as encrypted at rest (indicator only).</span>
+                            </div>
+                        </div>
+                        <span class="status-badge data-encryption-badge {{ 'active' if settings.data_encryption else 'inactive' }}">
+                            {{ 'ENABLED' if settings.data_encryption else 'DISABLED' }}
+                        </span>
+                    </div>
+
+
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-hourglass-half"></i></div>
+                            <div>
+                                <span class="settings-label">Scan Timeout</span>
+                                <span class="settings-desc">Maximum scan duration in seconds before timeout.</span>
+                            </div>
+                        </div>
+                        <input type="number" min="30" step="30" name="scan_timeout" class="small-input" value="{{ settings.scan_timeout }}" onchange="saveSettings()">
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-sitemap"></i></div>
+                            <div>
+                                <span class="settings-label">Subfinder Timeout</span>
+                                <span class="settings-desc">Passive subdomain enumeration timeout in seconds.</span>
+                            </div>
+                        </div>
+                        <input type="number" min="10" step="10" name="subfinder_timeout" class="small-input" value="{{ settings.subfinder_timeout }}" onchange="saveSettings()">
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-project-diagram"></i></div>
+                            <div>
+                                <span class="settings-label">Amass Timeout</span>
+                                <span class="settings-desc">Passive Amass enumeration timeout in seconds.</span>
+                            </div>
+                        </div>
+                        <input type="number" min="10" step="10" name="amass_timeout" class="small-input" value="{{ settings.amass_timeout }}" onchange="saveSettings()">
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-list"></i></div>
+                            <div>
+                                <span class="settings-label">Gobuster Timeout</span>
+                                <span class="settings-desc">DNS brute-force timeout for deep scans.</span>
+                            </div>
+                        </div>
+                        <input type="number" min="30" step="30" name="gobuster_timeout" class="small-input" value="{{ settings.gobuster_timeout }}" onchange="saveSettings()">
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-globe"></i></div>
+                            <div>
+                                <span class="settings-label">HTTPX Timeout</span>
+                                <span class="settings-desc">Web probing and live target detection timeout.</span>
+                            </div>
+                        </div>
+                        <input type="number" min="10" step="10" name="httpx_timeout" class="small-input" value="{{ settings.httpx_timeout }}" onchange="saveSettings()">
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-bug"></i></div>
+                            <div>
+                                <span class="settings-label">Nuclei Timeout</span>
+                                <span class="settings-desc">Timeout for lightweight vulnerability template scans.</span>
+                            </div>
+                        </div>
+                        <input type="number" min="10" step="10" name="nuclei_timeout" class="small-input" value="{{ settings.nuclei_timeout }}" onchange="saveSettings()">
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-rotate-right"></i></div>
+                            <div>
+                                <span class="settings-label">Max Retries</span>
+                                <span class="settings-desc">Number of retry attempts for unstable operations.</span>
+                            </div>
+                        </div>
+                        <input type="number" min="0" max="10" step="1" name="max_retries" class="small-input" value="{{ settings.max_retries }}" onchange="saveSettings()">
+                    </div>
+
+                    <div class="settings-row">
+                    <div class="settings-info">
+                        <div class="settings-icon"><i class="fas fa-thermometer-half"></i></div>
+                        <div>
+                            <span class="settings-label">Threat Detection Level</span>
+                            <span class="settings-desc">Select Low, Medium, or High to auto-fill the core tool timeout fields below.</span>
+                        </div>
+                    </div>
+                    <select class="lang-select" name="threat_level" onchange="applyThreatLevelPreset()">
+                        <option value="low" {% if settings.threat_level == 'low' %}selected{% endif %}>Low</option>
+                        <option value="medium" {% if settings.threat_level == 'medium' %}selected{% endif %}>Medium</option>
+                        <option value="high" {% if settings.threat_level == 'high' %}selected{% endif %}>High</option>
+                    </select>
+                </div>
+
+                    <div class="settings-actions">
+                        <button type="button" class="settings-btn" onclick="saveSettings()">Save All Settings</button>
+                        <button type="button" class="settings-btn secondary" onclick="resetSettingsForm()">Reset Unsaved Changes</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-stack">
+                <div class="settings-card">
+                    <div class="card-title"><i class="fas fa-plug"></i>Connected Services</div>
+
+                    <div class="service-tile">
+                        <div class="service-head">
+                            <span class="service-name">VirusTotal API</span>
+                            <span class="status-badge {{ 'active' if services.virustotal else 'inactive' }}">
+                                {{ 'Connected' if services.virustotal else 'Disconnected' }}
+                            </span>
+                        </div>
+                        <p class="service-desc">Used for malware and threat enrichment inside the toolbox and scan workflows.</p>
+                    </div>
+
+                    <div class="service-tile">
+                        <div class="service-head">
+                            <span class="service-name">Shodan API</span>
+                            <span class="status-badge {{ 'active' if services.shodan else 'inactive' }}">
+                                {{ 'Connected' if services.shodan else 'Disconnected' }}
+                            </span>
+                        </div>
+                        <p class="service-desc">Supports host enrichment and exposure intelligence lookups.</p>
+                    </div>
+
+                    <div class="service-tile">
+                        <div class="service-head">
+                            <span class="service-name">Gemini API</span>
+                            <span class="status-badge {{ 'active' if services.gemini else 'inactive' }}">
+                                {{ 'Connected' if services.gemini else 'Disconnected' }}
+                            </span>
+                        </div>
+                        <p class="service-desc">Available for future certificate and infrastructure intelligence workflows.</p>
+                    </div>
+
+
+                    <div class="mini-note">
+                        Some service statuses depend on whether credentials are currently present in your configuration.
+                    </div>
+                </div>
+
+                <div class="settings-card">
+
+    <div class="card-title"><i class="fas fa-wave-square"></i>Runtime Notes</div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-clock"></i></div>
+                            <div>
+                                <span class="settings-label">Current Scan Timeout</span>
+                                <span class="settings-desc">Used by the scan engine execution.</span>
+                            </div>
+                        </div>
+                        <span class="status-badge active">{{ settings.scan_timeout }}s</span>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-triangle-exclamation"></i></div>
+                            <div>
+                                <span class="settings-label">Threat Level</span>
+                                <span class="settings-desc">Currently saved detection sensitivity.</span>
+                            </div>
+                        </div>
+                        <span class="status-badge active">{{ settings.threat_level|upper }}</span>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-sitemap"></i></div>
+                            <div>
+                                <span class="settings-label">Subfinder Timeout</span>
+                                <span class="settings-desc">Passive subdomain enumeration runtime.</span>
+                            </div>
+                        </div>
+                        <span class="status-badge active">{{ settings.subfinder_timeout }}s</span>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-project-diagram"></i></div>
+                            <div>
+                                <span class="settings-label">Amass Timeout</span>
+                                <span class="settings-desc">Passive Amass enumeration runtime.</span>
+                            </div>
+                        </div>
+                        <span class="status-badge active">{{ settings.amass_timeout }}s</span>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-list"></i></div>
+                            <div>
+                                <span class="settings-label">Gobuster Timeout</span>
+                                <span class="settings-desc">DNS brute-force timeout for deep scans.</span>
+                            </div>
+                        </div>
+                        <span class="status-badge active">{{ settings.gobuster_timeout }}s</span>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-globe"></i></div>
+                            <div>
+                                <span class="settings-label">HTTPX Timeout</span>
+                                <span class="settings-desc">Live target probing and web discovery runtime.</span>
+                            </div>
+                        </div>
+                        <span class="status-badge active">{{ settings.httpx_timeout }}s</span>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-bug"></i></div>
+                            <div>
+                                <span class="settings-label">Nuclei Timeout</span>
+                                <span class="settings-desc">Template-based vulnerability scan runtime.</span>
+                            </div>
+                        </div>
+                        <span class="status-badge active">{{ settings.nuclei_timeout }}s</span>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-info">
+                            <div class="settings-icon"><i class="fas fa-database"></i></div>
+                            <div>
+                                <span class="settings-label">Persistence</span>
+                                <span class="settings-desc">All changes are stored in configuration.</span>
+                            </div>
+                        </div>
+                        <span class="status-badge active">LIVE</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const settingsForm = document.getElementById('settingsForm');
+    if (settingsForm && typeof FormData !== 'undefined') {
+        initialSettingsSnapshot = new FormData(settingsForm);
+    }
+});
+</script>
+{% endblock %}

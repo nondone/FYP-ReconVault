@@ -1,0 +1,446 @@
+{% extends "base.html" %}
+{% block title %}Dashboard: {{ target }}{% endblock %}
+
+{% block content %}
+<div class="rv-viz-stage">
+<div class="rv-viz-header rv-hero">
+    <div>
+        <h2 class="text-info mb-0">Visualization Dashboard</h2>
+        <div class="rv-chips">
+            <span class="rv-chip blue"><i class="fas fa-crosshairs"></i> Target: <strong>{{ target }}</strong></span>
+            <span class="rv-chip"><i class="far fa-calendar-alt"></i> Date: <strong>{{ date }}</strong></span>
+            <span class="rv-chip green"><i class="fas fa-gauge"></i> Mode: <strong>{{ mode.upper() if mode else "N/A" }}</strong></span>
+            <span class="rv-chip red"><i class="fas fa-chart-line"></i> Report ID: <strong>#{{ report_id }}</strong></span>
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-info btn-sm" onclick="togglePresenterMode()">
+            <i class="fas fa-display"></i> Presenter Mode
+        </button>
+        <a href="{{ url_for('view_scan', report_id=report_id) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Back to Scan View
+        </a>
+        <a href="{{ url_for('reports_page') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-vault"></i> Reports
+        </a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-12">
+        <div class="rv-kpi-grid">
+            <div class="rv-kpi">
+                <div class="label">
+                    <span>Live DNS</span>
+                    <span class="rv-badge">subdomains_all</span>
+                </div>
+                <div class="value" style="color:#3fb950;">{{ chart_data.live_dns }}</div>
+                <div class="sub">Total discovered subdomains (DNS-level inventory).</div>
+            </div>
+            <div class="rv-kpi">
+                <div class="label">
+                    <span>Live Web</span>
+                    <span class="rv-badge">subdomains_live/web</span>
+                </div>
+                <div class="value" style="color:#58a6ff;">{{ chart_data.live_web }}</div>
+                <div class="sub">HTTP-reachable targets (web-facing surface).</div>
+            </div>
+            <div class="rv-kpi">
+                <div class="label">
+                    <span>Web Coverage</span>
+                    <span class="rv-badge">live_web/live_dns</span>
+                </div>
+                <div id="kpiCoverage" class="value" style="color:#d29922;">0%</div>
+                <div class="sub">How much of the DNS inventory responds on web ports.</div>
+            </div>
+            <div class="rv-kpi">
+                <div class="label">
+                    <span>High-Risk Params</span>
+                    <span class="rv-badge">OWASP Top 25</span>
+                </div>
+                <div id="kpiParamTotal" class="value" style="color:#f85149;">0</div>
+                <div class="sub">Distinct high-risk parameter names found in mining output.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 rv-fade-in">
+        <div class="rv-callout">
+            <div class="dot" id="rvStoryDot"></div>
+            <div>
+                <div class="title" id="rvStoryTitle">Attack Surface Snapshot</div>
+                <div class="body" id="rvStoryBody">This dashboard turns your scan into two visuals: coverage (DNS vs Web) and high-risk parameter signals.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="custom-card border-top border-success border-4 h-100">
+            <div class="rv-card-head">
+                <div class="result-label text-success mb-0">
+                    <i class="fas fa-chart-column"></i> Live DNS vs Live Web
+                </div>
+                <div class="rv-mini-actions">
+                    <button type="button" class="rv-mini-btn" onclick="downloadChartPng('dnsWebChart','live-dns-vs-live-web')">Download PNG</button>
+                </div>
+            </div>
+            <div class="p-2">
+                <canvas id="dnsWebChart" height="140"></canvas>
+            </div>
+            <div class="text-secondary small mt-2">
+                Live DNS = discovered subdomains (all). Live Web = httpx-live web targets (or web report URLs).
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="custom-card border-top border-warning border-4 h-100">
+            <div class="rv-card-head">
+                <div class="result-label text-warning mb-0">
+                    <i class="fas fa-chart-pie"></i> High-Risk Parameters (OWASP Top 25)
+                </div>
+                <div class="rv-mini-actions">
+                    <button type="button" class="rv-mini-btn" onclick="downloadChartPng('paramPieChart','high-risk-params')">Download PNG</button>
+                </div>
+            </div>
+            <div class="p-2">
+                <canvas id="paramPieChart" height="140"></canvas>
+            </div>
+            <div class="text-secondary small mt-2">
+                Distribution is parsed from the <code>=== OWASP TOP 25 HIGH-RISK PARAMETERS ===</code> section.
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="custom-card border-top border-primary border-4 h-100">
+            <div class="rv-card-head">
+                <div class="result-label text-primary mb-0">
+                    <i class="fas fa-list"></i> High-Risk Params (Full List)
+                </div>
+                <div class="rv-mini-actions">
+                    <button type="button" class="rv-mini-btn" onclick="copyList('paramListBody')">Copy</button>
+                </div>
+            </div>
+            <div class="rv-list">
+                <div class="rv-list-toolbar">
+                    <input id="paramSearch" class="rv-input" placeholder="Search parameter (e.g. redirect, url, next)..." />
+                    <span id="paramCountBadge" class="rv-badge">0 items</span>
+                </div>
+                <div id="paramListBody" class="rv-list-body">No data.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="custom-card border-top border-info border-4 h-100">
+            <div class="rv-card-head">
+                <div class="result-label text-info mb-0">
+                    <i class="fas fa-link"></i> Live Web URLs (From Web Report)
+                </div>
+                <div class="rv-mini-actions">
+                    <button type="button" class="rv-mini-btn" onclick="copyList('urlListBody')">Copy</button>
+                </div>
+            </div>
+            <div class="rv-list">
+                <div class="rv-list-toolbar">
+                    <input id="urlSearch" class="rv-input" placeholder="Search URL (e.g. login, api, admin)..." />
+                    <span id="urlCountBadge" class="rv-badge">0 urls</span>
+                </div>
+                <div id="urlListBody" class="rv-list-body">No data.</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script id="rvChartData" type="application/json">{{ chart_data|tojson }}</script>
+<script id="rvReportData" type="application/json">{{ report|tojson }}</script>
+<script>
+    const CHART_DATA = JSON.parse(document.getElementById('rvChartData')?.textContent || "{}");
+    const REPORT = JSON.parse(document.getElementById('rvReportData')?.textContent || "{}");
+
+    function togglePresenterMode() {
+        document.body.classList.toggle('rv-present');
+        localStorage.setItem('rv_present_mode', document.body.classList.contains('rv-present') ? '1' : '0');
+    }
+    (function initPresenterMode(){
+        if (localStorage.getItem('rv_present_mode') === '1') document.body.classList.add('rv-present');
+    })();
+
+    function downloadChartPng(canvasId, baseName) {
+        const c = document.getElementById(canvasId);
+        if (!c) return;
+        const link = document.createElement('a');
+        const safe = (baseName || 'chart') + '-' + new Date().toISOString().slice(0,10) + '.png';
+        link.download = safe;
+        link.href = c.toDataURL('image/png', 1.0);
+        link.click();
+    }
+
+    function copyList(bodyId) {
+        const el = document.getElementById(bodyId);
+        if (!el) return;
+        const text = el.innerText || '';
+        if (!text.trim()) return;
+        navigator.clipboard?.writeText(text).catch(() => {});
+    }
+
+    function calcCoverage(liveDns, liveWeb) {
+        const dns = Number(liveDns || 0);
+        const web = Number(liveWeb || 0);
+        if (!dns) return 0;
+        return Math.round((web / dns) * 1000) / 10; // 1 decimal
+    }
+
+    function parseOwaspTop25Params(parametersText) {
+        const raw = String(parametersText || '');
+        const m = raw.match(/===\s*OWASP\s*TOP\s*25\s*HIGH-RISK\s*PARAMETERS\s*===\s*([\s\S]*?)(?:\n===|$)/i);
+        if (!m) return [];
+        const block = m[1] || '';
+        const counts = new Map();
+        block.split('\n').forEach(line => {
+            let s = (line || '').trim();
+            if (!s) return;
+            if (s.startsWith('===') || s.startsWith('---')) return;
+            s = s.replace(/^[*•-]\s*/, '').trim();
+            if (!s) return;
+            let key = s;
+            if (s.includes('->')) key = s.split('->')[0].trim();
+            else if (s.includes(':')) key = s.split(':')[0].trim();
+            else key = s.split(/\s+/)[0].trim();
+            key = key.replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase();
+            if (!key) return;
+            counts.set(key, (counts.get(key) || 0) + 1);
+        });
+        return [...counts.entries()].sort((a,b) => b[1]-a[1]).map(([k,v]) => ({ k, v }));
+    }
+
+    function parseLiveUrlsFromWebReport(webText) {
+        const raw = String(webText || '');
+        const urls = new Set();
+        raw.split('\n').forEach(line => {
+            const s = (line || '').trim();
+            if (!s) return;
+            if (s.startsWith('http://') || s.startsWith('https://')) {
+                urls.add(s.split(/\s+/)[0].trim());
+            }
+        });
+        return [...urls.values()];
+    }
+
+    function renderList(bodyEl, items, kind) {
+        if (!bodyEl) return;
+        if (!items || items.length === 0) {
+            bodyEl.textContent = 'No data.';
+            return;
+        }
+        if (kind === 'kv') {
+            bodyEl.innerHTML = items.map(it => (
+                `<div class="rv-row"><div class="k" title="${it.k}">${it.k}</div><div class="v">${it.v}</div></div>`
+            )).join('');
+            return;
+        }
+        if (kind === 'url') {
+            bodyEl.innerHTML = items.map(u => (
+                `<div class="rv-row"><div class="k" title="${u}">${u}</div><div class="v"><a href="${u}" target="_blank" rel="noopener noreferrer" style="color:#3fb950;text-decoration:none;">Open</a></div></div>`
+            )).join('');
+            return;
+        }
+    }
+
+    // Bar: Live DNS vs Live Web
+    (function () {
+        const ctx = document.getElementById('dnsWebChart');
+        if (!ctx) return;
+
+        const g = ctx.getContext('2d');
+        const gradA = g.createLinearGradient(0, 0, 0, 160);
+        gradA.addColorStop(0, 'rgba(63,185,80,0.75)');
+        gradA.addColorStop(1, 'rgba(63,185,80,0.10)');
+        const gradB = g.createLinearGradient(0, 0, 0, 160);
+        gradB.addColorStop(0, 'rgba(88,166,255,0.75)');
+        gradB.addColorStop(1, 'rgba(88,166,255,0.10)');
+
+        Chart.defaults.color = '#8b949e';
+        Chart.defaults.font.family = "Inter, -apple-system, system-ui, Segoe UI, sans-serif";
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Live DNS', 'Live Web'],
+                datasets: [{
+                    label: 'Count',
+                    data: [CHART_DATA.live_dns || 0, CHART_DATA.live_web || 0],
+                    backgroundColor: [gradA, gradB],
+                    borderColor: ['rgba(63,185,80,0.95)', 'rgba(88,166,255,0.95)'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: true }
+                },
+                scales: {
+                    x: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(255,255,255,0.06)' } },
+                    y: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(255,255,255,0.06)' }, beginAtZero: true }
+                }
+            }
+        });
+    })();
+
+    // Pie: High-risk params distribution
+    (function () {
+        const ctx = document.getElementById('paramPieChart');
+        if (!ctx) return;
+
+        const labels = CHART_DATA.param_labels || [];
+        const values = CHART_DATA.param_values || [];
+
+        const hasData = labels.length > 0 && values.length > 0;
+        const finalLabels = hasData ? labels : ['No data'];
+        const finalValues = hasData ? values : [1];
+
+        const colors = [
+            'rgba(248,81,73,0.70)',
+            'rgba(210,153,34,0.70)',
+            'rgba(88,166,255,0.70)',
+            'rgba(63,185,80,0.70)',
+            'rgba(163,113,247,0.65)',
+            'rgba(255,123,114,0.65)',
+            'rgba(255,211,106,0.65)',
+            'rgba(121,192,255,0.65)',
+            'rgba(139,148,158,0.55)'
+        ];
+
+        const centerText = {
+            id: 'centerText',
+            afterDraw(chart, args, opts) {
+                const { ctx, chartArea } = chart;
+                if (!chartArea) return;
+                const x = (chartArea.left + chartArea.right) / 2;
+                const y = (chartArea.top + chartArea.bottom) / 2;
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = 'rgba(230,237,243,0.95)';
+                ctx.font = '800 18px Inter, system-ui, sans-serif';
+                ctx.fillText(String(opts?.title || 'Params'), x, y - 10);
+                ctx.fillStyle = 'rgba(139,148,158,0.95)';
+                ctx.font = '700 12px Inter, system-ui, sans-serif';
+                ctx.fillText(String(opts?.subtitle || ''), x, y + 12);
+                ctx.restore();
+            }
+        };
+
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: finalLabels,
+                datasets: [{
+                    data: finalValues,
+                    backgroundColor: finalLabels.map((_, i) => colors[i % colors.length]),
+                    borderColor: 'rgba(255,255,255,0.10)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '62%',
+                plugins: {
+                    centerText: {
+                        title: hasData ? 'Top Params' : 'No data',
+                        subtitle: hasData ? `${finalLabels.length} slices` : ''
+                    },
+                    legend: { position: 'bottom', labels: { color: '#8b949e', boxWidth: 12 } },
+                    tooltip: { enabled: true }
+                }
+            },
+            plugins: [centerText]
+        });
+    })();
+
+    // Lists + KPIs
+    (function () {
+        const coverage = calcCoverage(CHART_DATA.live_dns, CHART_DATA.live_web);
+        const covEl = document.getElementById('kpiCoverage');
+        if (covEl) covEl.textContent = `${coverage}%`;
+
+        const params = parseOwaspTop25Params(REPORT.parameters);
+        const kpiParamTotal = document.getElementById('kpiParamTotal');
+        if (kpiParamTotal) kpiParamTotal.textContent = String(params.length);
+
+        // Story/narrative (simple but punchy for demo)
+        const dot = document.getElementById('rvStoryDot');
+        const title = document.getElementById('rvStoryTitle');
+        const body = document.getElementById('rvStoryBody');
+        if (title && body && dot) {
+            const cov = calcCoverage(CHART_DATA.live_dns, CHART_DATA.live_web);
+            const hasParams = params.length > 0;
+            const tone = cov >= 50 ? 'strong' : (cov >= 15 ? 'medium' : 'low');
+            if (tone === 'strong') {
+                dot.style.background = '#3fb950';
+                dot.style.boxShadow = '0 0 0 6px rgba(63,185,80,0.12)';
+                title.textContent = 'High Web Coverage';
+                body.textContent = `About ${cov}% of discovered DNS assets respond on web ports. This is a broad web-facing surface — great for prioritizing endpoint review and hardening.`;
+            } else if (tone === 'medium') {
+                dot.style.background = '#d29922';
+                dot.style.boxShadow = '0 0 0 6px rgba(210,153,34,0.12)';
+                title.textContent = 'Moderate Web Exposure';
+                body.textContent = `Roughly ${cov}% of DNS assets are web-reachable. Focus on the live web list first, then validate whether remaining DNS assets are non-web services.`;
+            } else {
+                dot.style.background = '#58a6ff';
+                dot.style.boxShadow = '0 0 0 6px rgba(88,166,255,0.12)';
+                title.textContent = 'Low Web Exposure';
+                body.textContent = `Only about ${cov}% of DNS assets respond on web ports. This may indicate mostly non-web infrastructure or strict perimeter controls.`;
+            }
+            if (hasParams) {
+                body.textContent += ` High-risk parameter signals were detected (top ${Math.min(8, params.length)} shown).`;
+            } else {
+                body.textContent += ` No OWASP Top 25 parameter signals were found in the mining output.`;
+            }
+        }
+
+        const paramBody = document.getElementById('paramListBody');
+        const paramBadge = document.getElementById('paramCountBadge');
+        const paramSearch = document.getElementById('paramSearch');
+        let paramCurrent = params;
+        renderList(paramBody, paramCurrent, 'kv');
+        if (paramBadge) paramBadge.textContent = `${paramCurrent.length} items`;
+
+        if (paramSearch) {
+            paramSearch.addEventListener('input', () => {
+                const q = (paramSearch.value || '').trim().toLowerCase();
+                paramCurrent = !q ? params : params.filter(x => x.k.includes(q));
+                renderList(paramBody, paramCurrent, 'kv');
+                if (paramBadge) paramBadge.textContent = `${paramCurrent.length} items`;
+            });
+        }
+
+        const urls = parseLiveUrlsFromWebReport(REPORT.web);
+        const urlBody = document.getElementById('urlListBody');
+        const urlBadge = document.getElementById('urlCountBadge');
+        const urlSearch = document.getElementById('urlSearch');
+        let urlCurrent = urls;
+        renderList(urlBody, urlCurrent.slice(0, 120), 'url');
+        if (urlBadge) urlBadge.textContent = `${urlCurrent.length} urls`;
+
+        if (urlSearch) {
+            urlSearch.addEventListener('input', () => {
+                const q = (urlSearch.value || '').trim().toLowerCase();
+                urlCurrent = !q ? urls : urls.filter(u => u.toLowerCase().includes(q));
+                renderList(urlBody, urlCurrent.slice(0, 120), 'url');
+                if (urlBadge) urlBadge.textContent = `${urlCurrent.length} urls`;
+            });
+        }
+    })();
+</script>
+{% endblock %}
+
+</div>

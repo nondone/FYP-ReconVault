@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}File Scan{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 file-scan-page">
+    <section class="file-scan-hero">
+        <div class="file-scan-hero-left">
+            <span class="file-scan-eyebrow">VirusTotal Integration</span>
+            <h1 class="file-scan-title">
+                <i class="fas fa-file-shield"></i>
+                File Scan Result
+            </h1>
+            <p class="file-scan-subtitle">
+                Review threat intelligence, detection confidence, file metadata, and engine verdicts in a clean ReconVault analysis view.
+            </p>
+        </div>
+
+        <div class="file-scan-hero-actions">
+            <a href="{{ url_for('view_scan') }}" class="file-scan-btn secondary">
+                <i class="fas fa-arrow-left"></i>
+                Back to Scan Center
+            </a>
+            <a href="{{ result.vt_link }}" target="_blank" rel="noopener noreferrer" class="file-scan-btn primary">
+                <i class="fas fa-arrow-up-right-from-square"></i>
+                Open in VirusTotal
+            </a>
+        </div>
+    </section>
+
+    <div class="file-scan-layout">
+        <main class="file-scan-main-card">
+            <div class="file-scan-card-head">
+                <div>
+                    <span class="file-scan-card-label">Analysis Overview</span>
+                    <h2 class="file-scan-card-title">File Intelligence Summary</h2>
+                </div>
+
+                <span class="file-scan-status {{ 'processing' if result.status != 'completed' else 'completed' }}">
+                    {{ result.status }}
+                </span>
+            </div>
+
+            <div class="file-scan-grid">
+                <div class="file-scan-meta-card wide">
+                    <span class="file-scan-meta-label">Filename</span>
+                    <span class="file-scan-meta-value">{{ result.filename }}</span>
+                </div>
+
+                <div class="file-scan-meta-card">
+                    <span class="file-scan-meta-label">Source</span>
+                    <span class="file-scan-meta-value">
+                        {{ result.source|replace('_', ' ')|title if result.source else 'VirusTotal' }}
+                    </span>
+                </div>
+
+                <div class="file-scan-meta-card">
+                    <span class="file-scan-meta-label">Reputation</span>
+                    <span class="file-scan-meta-value">
+                        {{ result.reputation if result.reputation is not none else 0 }}
+                    </span>
+                </div>
+
+                <div class="file-scan-meta-card wide hash">
+                    <span class="file-scan-meta-label">SHA256</span>
+                    <span class="file-scan-meta-value file-scan-hash">{{ result.sha256 }}</span>
+                </div>
+
+                <div class="file-scan-meta-card">
+                    <span class="file-scan-meta-label">Type</span>
+                    <span class="file-scan-meta-value">{{ result.type_description }}</span>
+                </div>
+
+                <div class="file-scan-meta-card">
+                    <span class="file-scan-meta-label">Last Analysis</span>
+                    <span class="file-scan-meta-value">
+                        {{ result.last_analysis_date if result.last_analysis_date else 'Pending' }}
+                    </span>
+                </div>
+            </div>
+
+            {% if result.status == 'completed' %}
+            <section class="file-scan-section">
+                <div class="file-scan-section-head">
+                    <span class="file-scan-card-label">Detection Summary</span>
+                    <h3 class="file-scan-section-title">Threat Distribution</h3>
+                </div>
+
+                <div class="file-scan-summary-grid">
+                    <div class="file-scan-summary-tile danger">
+                        <span class="file-scan-summary-label">Malicious</span>
+                        <span class="file-scan-summary-value">{{ result.stats.malicious }}</span>
+                    </div>
+
+                    <div class="file-scan-summary-tile warning">
+                        <span class="file-scan-summary-label">Suspicious</span>
+                        <span class="file-scan-summary-value">{{ result.stats.suspicious }}</span>
+                    </div>
+
+                    <div class="file-scan-summary-tile success">
+                        <span class="file-scan-summary-label">Harmless</span>
+                        <span class="file-scan-summary-value">{{ result.stats.harmless }}</span>
+                    </div>
+
+                    <div class="file-scan-summary-tile neutral">
+                        <span class="file-scan-summary-label">Undetected</span>
+                        <span class="file-scan-summary-value">{{ result.stats.undetected }}</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="file-scan-section">
+                <div class="file-scan-section-head">
+                    <span class="file-scan-card-label">Top Engine Results</span>
+                    <h3 class="file-scan-section-title">Engine-by-Engine Detection</h3>
+                </div>
+
+                <div class="file-scan-engine-table">
+                    <div class="file-scan-engine-table-head">
+                        <span>Engine</span>
+                        <span>Verdict</span>
+                        <span>Result</span>
+                    </div>
+
+                    <div class="file-scan-engine-list">
+                        {% for engine, engine_data in result.engine_results.items() %}
+                            {% if loop.index <= 12 %}
+                            <div class="file-scan-engine-row">
+                                <div class="file-scan-engine-name">{{ engine }}</div>
+
+                                <div class="file-scan-engine-verdict">
+                                    {% if engine_data.category == 'malicious' %}
+                                        <span class="file-scan-pill danger">{{ engine_data.category }}</span>
+                                    {% elif engine_data.category == 'suspicious' %}
+                                        <span class="file-scan-pill warning">{{ engine_data.category }}</span>
+                                    {% elif engine_data.category == 'undetected' %}
+                                        <span class="file-scan-pill success">{{ engine_data.category }}</span>
+                                    {% else %}
+                                        <span class="file-scan-pill neutral">{{ engine_data.category }}</span>
+                                    {% endif %}
+                                </div>
+
+                                <div class="file-scan-engine-result">
+                                    {{ engine_data.result if engine_data.result else 'No signature detail' }}
+                                </div>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </section>
+            {% else %}
+            <div class="file-scan-processing">
+                <div class="file-scan-processing-icon">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </div>
+                <div>
+                    <div class="file-scan-processing-title">Analysis in progress</div>
+                    <div class="file-scan-processing-text">
+                        VirusTotal has accepted the uploaded file and is still generating engine verdicts. Please check the external VirusTotal page for live status.
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </main>
+
+        <aside class="file-scan-side-card">
+            <div class="file-scan-side-head">
+                <span class="file-scan-card-label">Quick Actions</span>
+                <h3 class="file-scan-section-title">Navigation</h3>
+            </div>
+
+            <div class="file-scan-action-list">
+                <a href="{{ result.vt_link }}" target="_blank" rel="noopener noreferrer" class="file-scan-action-card primary">
+                    <div class="file-scan-action-icon">
+                        <i class="fas fa-arrow-up-right-from-square"></i>
+                    </div>
+                    <div>
+                        <div class="file-scan-action-title">Open VirusTotal</div>
+                        <div class="file-scan-action-text">View the original report directly on VirusTotal.</div>
+                    </div>
+                </a>
+
+                <a href="{{ url_for('view_scan') }}" class="file-scan-action-card secondary">
+                    <div class="file-scan-action-icon">
+                        <i class="fas fa-shield-halved"></i>
+                    </div>
+                    <div>
+                        <div class="file-scan-action-title">Back to Scan Center</div>
+                        <div class="file-scan-action-text">Return to the ReconVault scan workflow.</div>
+                    </div>
+                </a>
+
+                <div class="file-scan-note">
+                    <div class="file-scan-note-title">Analyst Note</div>
+                    <div class="file-scan-note-text">
+                        This page summarizes file metadata, detection ratios, and the most relevant engine verdicts in a concise internal dashboard view.
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+{% endblock %}

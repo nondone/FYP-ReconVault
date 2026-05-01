@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReconVault - Register</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="register-page">
+
+    <div class="auth-shell">
+        <section class="auth-hero">
+            <div class="auth-hero-top">
+                <div class="auth-brand-chip">
+                    <i class="fas fa-user-plus"></i>
+                </div>
+
+                <h1 class="auth-hero-title">Provision a new operator for ReconVault.</h1>
+                <p class="auth-hero-subtitle">
+                    Create a secure account for access to target scans, reporting workflows, and Kali-assisted recon operations inside your vault environment.
+                </p>
+
+                <div class="auth-hero-stats">
+                    <div class="auth-hero-stat">
+                        <div class="auth-hero-stat-label">Workflow</div>
+                        <div class="auth-hero-stat-value">Registration</div>
+                    </div>
+                    <div class="auth-hero-stat">
+                        <div class="auth-hero-stat-label">Security</div>
+                        <div class="auth-hero-stat-value">Protected</div>
+                    </div>
+                    <div class="auth-hero-stat">
+                        <div class="auth-hero-stat-label">Access</div>
+                        <div class="auth-hero-stat-value">Operator</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="auth-hero-bottom">
+                <div class="auth-console">
+                    <div class="auth-console-top">
+                        <span class="auth-console-dot" style="background:#ff5f56;"></span>
+                        <span class="auth-console-dot" style="background:#ffbd2e;"></span>
+                        <span class="auth-console-dot" style="background:#27c93f;"></span>
+                        <span class="ms-2" style="font-size:12px; color:#8b949e; font-family:monospace;">vault://access/register</span>
+                    </div>
+                    <div class="auth-console-body">
+                        <div><span class="muted">[SYSTEM]</span> Preparing operator enrollment...</div>
+                        <div><span class="muted">[AUTH]</span> Credential vault available</div>
+                        <div><span class="muted">[POLICY]</span> Access rules initialized</div>
+                        <div><span class="muted">[READY]</span> Awaiting new operator details</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="auth-panel">
+            <div class="auth-panel-inner">
+                <div class="auth-badge auth-badge-warning">
+                    <i class="fas fa-shield-halved"></i>
+                    New Operator Setup
+                </div>
+
+                <h2 class="auth-title">Register Account</h2>
+                <p class="auth-copy">Register your credentials for the ReconVault system.</p>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                  {% if messages %}
+                    {% for category, message in messages %}
+                      <div class="alert alert-danger alert-dismissible fade show auth-alert text-start" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2 text-warning"></i>{{ message }}
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+                      </div>
+                    {% endfor %}
+                  {% endif %}
+                {% endwith %}
+
+                <form action="{{ url_for('register') }}" method="POST">
+                    <div class="mb-2 text-start">
+                        <label for="username" class="auth-form-label">Create Username</label>
+                    </div>
+                    <div class="auth-field">
+                        <i class="fas fa-user"></i>
+                        <input type="text" id="username" name="username" class="auth-input"
+                               placeholder="Choose a username"
+                               autocomplete="off"
+                               minlength="4" maxlength="32"
+                               pattern="^[A-Za-z][A-Za-z0-9._-]{3,31}$"
+                               title="4-32 chars. Start with a letter. Allowed: letters, numbers, dot (.), underscore (_), dash (-)."
+                               required>
+                    </div>
+                    <div class="text-start" style="font-size: 11px; color: #8b949e; line-height: 1.6; margin: 8px 0 14px;">
+                        Requirements: 4–32 characters, starts with a letter <span style="font-family: monospace;"></span>
+                    </div>
+
+                    <div class="mb-2 text-start">
+                        <label for="password" class="auth-form-label">Set Password</label>
+                    </div>
+                    <div class="auth-field">
+                        <i class="fas fa-key"></i>
+                        <input type="password" id="password" name="password" class="auth-input"
+                               placeholder="Create a password"
+                               autocomplete="new-password"
+                               minlength="8" maxlength="128"
+                               required>
+                    </div>
+                    <div class="text-start" style="font-size: 11px; color: #8b949e; line-height: 1.6; margin: 8px 0 12px;">
+                        Requirements: 8+ characters ,No spaces.
+                    </div>
+
+                    <div class="mb-2 text-start">
+                        <label for="confirm_password" class="auth-form-label">Confirm Password</label>
+                    </div>
+                    <div class="auth-field">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="confirm_password" name="confirm_password" class="auth-input"
+                               placeholder="Re-enter your password"
+                               autocomplete="new-password"
+                               minlength="8" maxlength="128"
+                               required>
+                    </div>
+
+                    <button type="submit" class="auth-btn auth-btn-warning">REGISTER ACCOUNT</button>
+                </form>
+
+                <div class="auth-footer">
+                    Already have an operator account?
+                    <a href="{{ url_for('login') }}" class="auth-link-warning">Back to Login</a>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

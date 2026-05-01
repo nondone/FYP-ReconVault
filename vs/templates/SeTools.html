@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Security Toolbox{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="page-header">
+    <h2><i class="fas fa-shield-alt me-2"></i>Security Toolbox</h2>
+    <p>Manual investigation tools powered by specialized APIs</p>
+</div>
+
+<div class="row g-4">
+    <!-- Main Result Panel -->
+    <div class="col-lg-8">
+        <div class="tool-card p-5">
+            <div class="tool-card-header">
+                <h5 class="text-info"><i class="fas fa-microscope"></i>Analysis Result</h5>
+                {% if result and result.target %}
+                    <span class="target-badge">{{ result.target }}</span>
+                {% endif %}
+            </div>
+
+            {% if error %}
+                <!-- Error Display -->
+                <div class="alert-error">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    <strong>Analysis Failed:</strong> {{ error }}
+                </div>
+
+            {% elif result %}
+                <!-- Headers Analysis -->
+                {% if result.type == 'headers' %}
+                    <div class="table-responsive">
+                        <table class="table table-tools">
+                            <thead>
+                                <tr>
+                                    <th>Security Header</th>
+                                    <th style="width: 120px;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for header, status in result.data.items() %}
+                                <tr>
+                                    <td>
+                                        <code style="color: #58a6ff; background: rgba(88,166,255,0.08); padding: 4px 8px; border-radius: 4px;">{{ header }}</code>
+                                    </td>
+                                    <td>
+                                        <span class="{{ 'badge-secure' if status == 'PROTECTED' else 'badge-missing' }}">
+                                            {{ status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Summary -->
+                    <div class="info-box mt-4">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>{{ result.data.values() | list | count }}</strong> security headers analyzed
+                    </div>
+
+                <!-- VirusTotal Analysis -->
+                {% elif result.type == 'virustotal' %}
+                    {% if result.data.get('last_analysis_stats') %}
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-3">
+                                <div class="stat-card text-center">
+                                    <h3 class="text-danger">{{ result.data.last_analysis_stats.get('malicious', 0) }}</h3>
+                                    <small class="text-uppercase text-secondary">Malicious</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card text-center">
+                                    <h3 class="text-warning">{{ result.data.last_analysis_stats.get('suspicious', 0) }}</h3>
+                                    <small class="text-uppercase text-secondary">Suspicious</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card text-center">
+                                    <h3 class="text-success">{{ result.data.last_analysis_stats.get('harmless', 0) }}</h3>
+                                    <small class="text-uppercase text-secondary">Harmless</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card text-center">
+                                    <h3 class="text-info">{{ result.data.get('status', 'UNKNOWN') | upper }}</h3>
+                                    <small class="text-uppercase text-secondary">Status</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Risk Assessment -->
+                        <div class="info-box">
+                            <i class="fas fa-flag"></i>
+                            {% set malicious = result.data.last_analysis_stats.get('malicious', 0) %}
+                            {% set suspicious = result.data.last_analysis_stats.get('suspicious', 0) %}
+                            {% set harmless = result.data.last_analysis_stats.get('harmless', 0) %}
+                            {% set undetected = result.data.last_analysis_stats.get('undetected', 0) %}
+
+                            {% if result.data.get('status') != 'completed' %}
+                                <strong>Analysis Pending:</strong> VirusTotal is still processing this URL.
+                            {% elif malicious == 0 and suspicious == 0 %}
+                                <strong>Clean Result:</strong> No malicious or suspicious detections were reported. {{ harmless }} vendors marked it harmless and {{ undetected }} returned undetected.
+                            {% elif malicious <= 2 and suspicious <= 2 %}
+                                <strong>Low Risk:</strong> Small number of detections found. Validate manually before trusting.
+                            {% elif malicious <= 5 or suspicious <= 5 %}
+                                <strong>Medium Risk:</strong> Multiple threat indicators were reported.
+                            {% else %}
+                                <strong>High Risk:</strong> Strong malicious indicators detected. Use caution.
+                            {% endif %}
+                        </div>
+
+                        <!-- Technical Evidence -->
+                        <h6 class="text-secondary mt-4 mb-3 small fw-bold text-uppercase">Technical Data (JSON)</h6>
+                        <pre class="tool-result-pre">{{ result.data | tojson(indent=2) }}</pre>
+                    {% else %}
+                        <div class="alert-error">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            <strong>Invalid Response:</strong> VirusTotal API returned unexpected format. Check API key configuration.
+                        </div>
+                    {% endif %}
+                {% endif %}
+
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-terminal"></i>
+                    <p>Select a security utility and enter a target to begin analysis</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="col-lg-4">
+        <div class="tool-card p-5">
+            <h5 class="text-secondary mb-4 fw-bold text-uppercase" style="font-size: 0.95rem;">
+                <i class="fas fa-sliders-h me-2 text-info"></i>Analysis Configuration
+            </h5>
+
+            <form action="/run_tool" method="POST" id="toolForm">
+                <!-- Tool Selection -->
+                <div class="form-section">
+                    <label class="form-label">Security Utility</label>
+                    <select name="tool_type" class="form-select">
+                        <option value="headers" {% if result and result.type == 'headers' %}selected{% endif %}>
+                            HTTP Security Headers
+                        </option>
+                        <option value="virustotal" {% if result and result.type == 'virustotal' %}selected{% endif %}>
+                            VirusTotal URL Scanner
+                        </option>
+                    </select>
+                    <small class="text-secondary d-block mt-2" style="font-size: 0.78rem;">
+                        <i class="fas fa-info-circle me-1" style="color: #58a6ff;"></i>
+                        Choose an analysis tool to inspect your target
+                    </small>
+                </div>
+
+                <!-- Target Input -->
+                <div class="form-section">
+                    <label class="form-label">Target URL / Hostname</label>
+                    <input type="text" name="tool_target" class="form-control" 
+                           placeholder="https://example.com" 
+                           value="{{ result.target if result else '' }}" 
+                           required>
+                    <small class="text-secondary d-block mt-2" style="font-size: 0.78rem;">
+                        <i class="fas fa-info-circle me-1" style="color: #58a6ff;"></i>
+                        Enter the complete URL or domain to analyze
+                    </small>
+                </div>
+
+                <!-- Execute Button -->
+                <button type="submit" class="btn btn-execute w-100 mt-4">
+                    <i class="fas fa-bolt me-2"></i>Execute Analysis
+                </button>
+
+                <!-- Info Box -->
+                <div class="info-box">
+                    <i class="fas fa-shield-alt"></i>
+                    <strong>Secure Analysis:</strong> All requests are encrypted and logged for audit compliance
+                </div>
+            </form>
+
+            <!-- Recent Scans (Optional) -->
+            <div style="margin-top: 28px; padding-top: 20px; border-top: 1px solid #21262d;">
+                <h6 class="text-secondary mb-3 fw-bold text-uppercase" style="font-size: 0.85rem;">
+                    <i class="fas fa-history me-2 text-warning"></i>Recent Targets
+                </h6>
+
+                <div style="font-size: 0.85rem; color: var(--text-gray);">
+                    {% if recent_targets %}
+                        {% for item in recent_targets %}
+                            <button type="button"
+                                    class="recent-target-btn"
+                                    data-tool="{{ item.tool_type }}"
+                                    data-target="{{ item.target }}"
+                                    style="width:100%; text-align:left; margin-bottom:8px; background:rgba(88,166,255,0.06); border:1px solid rgba(88,166,255,0.14); color:#c9d1d9; border-radius:8px; padding:10px 12px;">
+                                <div style="font-weight:600;">{{ item.target }}</div>
+                                <div style="font-size:0.75rem; color:#8b949e; text-transform:uppercase; margin-top:3px;">
+                                    {{ item.tool_type }}
+                                </div>
+                            </button>
+                        {% endfor %}
+                    {% else %}
+                        <p style="margin-bottom: 8px;">No recent scans</p>
+                    {% endif %}
+                </div>
+            </div>
+
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('toolForm').onsubmit = function() {
+        const btn = this.querySelector('button');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>ANALYZING...';
+        btn.disabled = true;
+        
+        setTimeout(() => {
+            if (btn.disabled) {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
+        }, 30000);
+    };
+
+    document.querySelector('[name="tool_type"]').addEventListener('change', function(e) {
+        const placeholders = {
+            'headers': 'https://example.com',
+            'virustotal': 'https://example.com'
+        };
+        document.querySelector('[name="tool_target"]').placeholder = placeholders[e.target.value];
+    });
+</script>
+{% endblock %}
