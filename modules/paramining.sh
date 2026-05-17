@@ -21,7 +21,7 @@ run_paramining() {
     : > "$gowitness_targets"
 
     # --- LOAD API KEY from cfg as fallback ---
-    local BASE_DIR="/home/kali/ReconVault"
+    local BASE_DIR="/home/hongxuan/ReconVault"
     if { [ -z "$GEMINI_API_KEY" ] || [ "$GEMINI_API_KEY" == "your_gemini_key_here" ]; } \
     && { [ -z "$OPENAI_API_KEY" ] || [ "$OPENAI_API_KEY" == "your_openai_key_here" ]; }; then
        [ -f "$BASE_DIR/reconvault.cfg" ] && source "$BASE_DIR/reconvault.cfg"

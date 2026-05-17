@@ -1,6 +1,8 @@
 #!/bin/bash
 # modules/vulns.sh
 
+# modules/vulns.sh
+
 append_owasp_mapping() {
     local vulns_output="$1"
     local detected=0
@@ -57,6 +59,72 @@ append_owasp_mapping() {
         detected=1
     fi
 
+    # --- ZAP Baseline -> OWASP mapping (additive) ---
+
+    # A05 Security Misconfiguration (headers/CORS/policy)
+    if has_match '(Content Security Policy \(CSP\) Header Not Set|CSP Header Not Set|\[10038\])'; then
+        echo "[OWASP:A05:2021] Security Misconfiguration -> CSP header not set (ZAP 10038)." >> "$vulns_output"
+        detected=1
+    fi
+
+    if has_match '(Cross-Domain Misconfiguration|\[10098\]|CORS)'; then
+        echo "[OWASP:A05:2021] Security Misconfiguration -> Cross-domain/CORS misconfiguration (ZAP 10098)." >> "$vulns_output"
+        detected=1
+    fi
+
+    if has_match '(Cross-Origin-Embedder-Policy Header Missing|Cross-Origin-Opener-Policy|Cross-Origin-Resource-Policy|\[90004\])'; then
+        echo "[OWASP:A05:2021] Security Misconfiguration -> Cross-origin isolation headers missing/invalid (ZAP 90004)." >> "$vulns_output"
+        detected=1
+    fi
+
+    if has_match '(Deprecated Feature Policy Header Set|Feature Policy|\[10063\])'; then
+        echo "[OWASP:A05:2021] Security Misconfiguration -> Deprecated Feature-Policy/Permissions-Policy header usage (ZAP 10063)." >> "$vulns_output"
+        detected=1
+    fi
+
+    if has_match '(Content-Type Header Missing|\[10019\]|X-Content-Type-Options Header Missing|\[10021\]|Anti-clickjacking Header|\[10020\])'; then
+        echo "[OWASP:A05:2021] Security Misconfiguration -> Missing security headers (Content-Type/XCTO/XFO) (ZAP 10019/10021/10020)." >> "$vulns_output"
+        detected=1
+    fi
+
+    # A02 Cryptographic Failures (cookie transport / mixed content / TLS posture indicators)
+    if has_match '(Cookie Without Secure Flag|\[10011\]|Cookie No HttpOnly Flag|\[10010\]|Strict-Transport-Security Header|\[10035\]|Secure Pages Include Mixed Content|\[10040\])'; then
+        echo "[OWASP:A02:2021] Cryptographic Failures -> Transport/cookie security issues (Secure/HttpOnly/HSTS/Mixed Content) (ZAP 10010/10011/10035/10040)." >> "$vulns_output"
+        detected=1
+    fi
+
+    # A03 Injection (client-side XSS signals)
+    # ADDED: Mapping for your specific 'Dangerous JS Functions' finding
+    if has_match '(Dangerous JS Functions|\[10110\]|User Controllable HTML Element Attribute \(Potential XSS\)|\[(10031|10043)\])'; then
+        echo "[OWASP:A03:2021] Injection -> Client-side XSS indicators (dangerous JS functions / controllable attributes) (ZAP 10110/10031/10043)." >> "$vulns_output"
+        detected=1
+    fi
+
+    # A01 Broken Access Control (open redirect / off-site redirect)
+    if has_match '(Off-site Redirect|\[10028\]|Big Redirect Detected|\[10044\])'; then
+        echo "[OWASP:A01:2021] Broken Access Control -> Redirect behavior could enable auth/session flow abuse (ZAP 10028/10044)." >> "$vulns_output"
+        detected=1
+    fi
+
+    # A08 Software and Data Integrity Failures (SRI missing)
+    if has_match '(Sub Resource Integrity Attribute Missing|\[90003\])'; then
+        echo "[OWASP:A08:2021] Software and Data Integrity Failures -> Missing Subresource Integrity (SRI) on external scripts (ZAP 90003)." >> "$vulns_output"
+        detected=1
+    fi
+
+    # A05 Security Misconfiguration (info disclosure signals)
+    # ADDED: Mapping for your specific 'Timestamp Disclosure' finding
+    if has_match '(Timestamp Disclosure - Unix|\[10096\]|Information Disclosure|Debug Error Messages|\[10023\]|Suspicious Comments|\[10027\])'; then
+        echo "[OWASP:A05:2021] Security Misconfiguration -> Information disclosure signals (timestamps/debug/comments) (ZAP 10096/10023/10027)." >> "$vulns_output"
+        detected=1
+    fi
+
+    # A07 Identification and Authentication Failures (weak auth method)
+    if has_match '(Weak Authentication Method|\[10105\])'; then
+        echo "[OWASP:A07:2021] Identification and Authentication Failures -> Weak authentication method indicators (ZAP 10105)." >> "$vulns_output"
+        detected=1
+    fi
+
     if [[ "$detected" -eq 0 ]]; then
         echo "[OWASP] No direct OWASP Top 10 mapping identified from current positive findings." >> "$vulns_output"
     fi
@@ -106,6 +174,98 @@ tidy_vulns_output() {
 
     mv "$tmp" "$file"
 }
+# --- NEW: ZAP BASELINE (Docker) + OWASP mapping derived from ZAP findings ---
+run_zap_baseline() {
+    local scan_url="$1"
+    local out_file="$2"
+    local zap_limit="$3"
+
+    : > "$out_file"
+
+    if ! command -v docker &>/dev/null; then
+        echo -e "\n[+] ZAP BASELINE (Docker)\n  docker not found — skipping ZAP." >> "$out_file"
+        return 0
+    fi
+
+    # Pick docker command: docker OR sudo -n docker (non-interactive)
+    local DOCKER_CMD="docker"
+    if ! docker info >/dev/null 2>&1; then
+        if command -v sudo &>/dev/null && sudo -n docker info >/dev/null 2>&1; then
+            DOCKER_CMD="sudo -n docker"
+        else
+            echo -e "\n[+] ZAP BASELINE (Docker)\n  docker daemon not accessible (need sudo or docker group). Skipping." >> "$out_file"
+            return 0
+        fi
+    fi
+
+    # Check image availability, auto-pull if missing
+    local zap_image="ghcr.io/zaproxy/zaproxy:stable"
+    if ! $DOCKER_CMD image inspect "$zap_image" >/dev/null 2>&1; then
+        echo "  ZAP image not found locally. Pulling $zap_image ..." >> "$out_file"
+        if ! $DOCKER_CMD pull "$zap_image" >/dev/null 2>&1; then
+            zap_image="ghcr.io/zaproxy/zaproxy"
+            if ! $DOCKER_CMD image inspect "$zap_image" >/dev/null 2>&1; then
+                echo "  Stable image pull failed. Trying fallback image $zap_image ..." >> "$out_file"
+                if ! $DOCKER_CMD pull "$zap_image" >/dev/null 2>&1; then
+                    echo -e "\n[+] ZAP BASELINE (Docker)\n  Failed to pull ZAP image (ghcr.io/zaproxy/zaproxy:stable)." >> "$out_file"
+                    return 0
+                fi
+            fi
+        fi
+    fi
+
+    local work_dir
+    work_dir="$(mktemp -d 2>/dev/null || echo "")"
+    if [[ -z "$work_dir" || ! -d "$work_dir" ]]; then
+        echo -e "\n[+] ZAP BASELINE (Docker)\n  mktemp failed — skipping." >> "$out_file"
+        return 0
+    fi
+    local zap_stdout="$work_dir/zap_stdout.txt"
+    local zap_target="$scan_url"
+
+    # Ensure ZAP always gets a full URL
+    if [[ ! "$zap_target" =~ ^https?:// ]]; then
+        if [[ "$zap_target" =~ \.up\.railway\.app$ || "$zap_target" =~ \.railway\.app$ || "$zap_target" =~ \.herokuapp\.com$ ]]; then
+            zap_target="https://$zap_target"
+        else
+            zap_target="http://$zap_target"
+        fi
+    fi
+
+    # Docker localhost mapping
+    if echo "$zap_target" | grep -Eq '^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?($|/)'; then
+        zap_target=$(echo "$zap_target" | sed -E 's#^http://localhost#http://host.docker.internal#; s#^https://localhost#https://host.docker.internal#; s#^http://127\.0\.0\.1#http://host.docker.internal#; s#^https://127\.0\.0\.1#https://host.docker.internal#')
+    fi
+
+    timeout "${zap_limit}s" $DOCKER_CMD run --rm \
+        -t "$zap_image" \
+        zap-baseline.py -t "$zap_target" -I -s --autooff -m 1 \
+        > "$zap_stdout" 2>&1 || true
+
+    {
+        echo -e "\n[+] ZAP BASELINE (Passive Scan)"
+        echo "  Target: $zap_target"
+        echo "  Timeout: ${zap_limit}s"
+    } >> "$out_file"
+
+    if [[ -s "$zap_stdout" ]]; then
+        echo "  --- Findings (ZAP) ---" >> "$out_file"
+        grep -E '^(WARN-NEW|FAIL-NEW|WARN-INPROG|FAIL-INPROG):' "$zap_stdout" \
+            | sed 's/\r$//' \
+            | head -120 \
+            | sed 's/^/  /' >> "$out_file"
+
+        if ! grep -Eq '^(WARN-NEW|FAIL-NEW|WARN-INPROG|FAIL-INPROG):' "$zap_stdout"; then
+            tail -n 5 "$zap_stdout" | sed 's/\r$//' | sed 's/^/  /' >> "$out_file"
+        fi
+    else
+        echo "  No ZAP output captured (timed out or blocked)." >> "$out_file"
+    fi
+
+    rm -rf "$work_dir" 2>/dev/null || true
+    return 0
+}
+
 
 run_vulns() {
     local target=$1
@@ -121,6 +281,11 @@ run_vulns() {
     mkdir -p "$out_dir/temp"
     : > "$ai_params_file"
 
+    # --- NEW: use env timeouts if set ---
+    local httpx_limit="${HTTPX_TIMEOUT:-120}"
+    local nuclei_limit="${NUCLEI_TIMEOUT:-120}"
+    local zap_limit="${ZAP_TIMEOUT:-180}"
+
     log_info "Starting Vulnerability Scanning for $target (mode=$mode)"
     {
         echo "========================================="
@@ -129,7 +294,14 @@ run_vulns() {
         echo "========================================="
     } > "$vulns_output"
 
-    [[ ! $target =~ ^http ]] && target="http://$target"
+    default_web_scheme() {
+        local host="$1"
+        if [[ "$host" =~ \.up\.railway\.app$ || "$host" =~ \.railway\.app$ || "$host" =~ \.herokuapp\.com$ ]]; then
+            echo "https://"
+        else
+            echo "http://"
+        fi
+    }
 
     local target_host
     target_host="${target#http://}"
@@ -137,20 +309,25 @@ run_vulns() {
     target_host="${target_host%%/*}"
 
     # --- 1. PREPARE TARGET LIST ---
-    # Fast mode stays focused on the main target only.
-    # Full mode expands scope to discovered subdomains when available.
     if [[ "$mode" == "fast" ]]; then
         echo "$target" > "$vuln_targets_raw"
     else
         if [[ -s "$subdomain_file" ]] && ! grep -q "Skipped\|Error" "$subdomain_file"; then
-            awk '{print "http://"$1}' "$subdomain_file" | tr -d '\r' | sort -u > "$vuln_targets_raw"
+            while IFS= read -r sub; do
+                sub=$(echo "$sub" | tr -d '\r' | xargs)
+                [[ -z "$sub" ]] && continue
+                                if [[ "$sub" =~ ^https?:// ]]; then
+                    echo "$sub"
+                else
+                    echo "$(default_web_scheme "$sub")$sub"
+                fi
+            done < "$subdomain_file" | sort -u > "$vuln_targets_raw"
         else
             echo "$target" > "$vuln_targets_raw"
         fi
     fi
 
-    # --- 2. FILTER TO LIVE WEB TARGETS USING HTTPX ---
-    # This avoids wasting scanner time on dead or unreachable hosts.
+    # --- 2. FILTER ONLY LIVE TARGETS ---
     if command -v httpx &>/dev/null; then
         log_info "Filtering live web targets with httpx..."
         timeout "${httpx_limit}s" httpx \
@@ -158,7 +335,6 @@ run_vulns() {
             -silent \
             -threads 40 \
             -rate-limit 80 \
-            -mc 200,201,202,203,204,301,302,307,308,401,403 \
             > "$vuln_targets" 2>/dev/null
 
         if [[ ! -s "$vuln_targets" ]]; then
@@ -172,8 +348,6 @@ run_vulns() {
     target_count=$(wc -l < "$vuln_targets")
 
     # --- 3. BUILD PARAMETERIZED TARGET LIST ---
-    # Reuse mined parameter URLs first, then optionally synthesize test URLs
-    # from AI-predicted parameter names.
     : > "$param_targets"
 
     if [[ -s "$out_dir/parameters.txt" ]]; then
@@ -223,6 +397,7 @@ run_vulns() {
     local commix_tmp="$out_dir/temp/commix.txt"
     local nomore403_tmp="$out_dir/temp/nomore403.txt"
     local subzy_tmp="$out_dir/temp/subzy.txt"
+    local zap_tmp="$out_dir/temp/zap.txt"
 
     : > "$nuclei_tmp"
     : > "$sqlmap_tmp"
@@ -232,45 +407,53 @@ run_vulns() {
     : > "$commix_tmp"
     : > "$nomore403_tmp"
     : > "$subzy_tmp"
+    : > "$zap_tmp"
 
     # --- 4. RUN SCANNERS ---
-    # Fast mode runs lightweight Nuclei only.
-    # Full mode adds deeper checks in parallel.
-     if command -v nuclei &>/dev/null; then
-        (
-            if [[ "$mode" == "fast" ]]; then
-                log_info "Running lightweight Nuclei scan (${nuclei_limit}s)..."
-                {
-                    echo -e "\n[+] NUCLEI - LIGHTWEIGHT FINDINGS"
-                    timeout "${nuclei_limit}s" nuclei \
-                        -l "$vuln_targets" \
-                        -tags cve,vuln,misconfig,exposure \
-                        -severity critical,high,medium \
-                        -silent -ni -nc \
-                        -rate-limit 40 \
-                        -bulk-size 10 \
-                        -c 10 \
-                        2>/dev/null || echo "  Nuclei timed out or no findings."
-                } >> "$nuclei_tmp"
-            else
-                log_info "Running Nuclei (CVE + DAST) (${nuclei_limit}s)..."
+        if [[ "$mode" == "full" ]]; then
+        if command -v nuclei &>/dev/null; then
+            (
+                log_info "Running Nuclei (broad web findings) (${nuclei_limit}s)..."
                 {
                     echo -e "\n[+] NUCLEI - CVE & DAST FINDINGS"
+                    local nuclei_raw
+                    nuclei_raw="$(mktemp)"
+
                     timeout "${nuclei_limit}s" nuclei \
                         -l "$vuln_targets" \
-                        -tags cve,dast,vuln,misconfig,exposure \
                         -severity critical,high,medium \
                         -silent -ni -nc \
                         -rate-limit 80 \
                         -bulk-size 20 \
                         -c 25 \
-                        2>/dev/null || echo "  Nuclei timed out or no findings."
+                        > "$nuclei_raw" 2>/dev/null || true
+
+                    if [[ -s "$nuclei_raw" ]]; then
+                        cat "$nuclei_raw"
+                    else
+                        echo "  Nuclei completed with no findings or timed out."
+                    fi
+
+                    rm -f "$nuclei_raw"
                 } >> "$nuclei_tmp"
-            fi
-        ) &
+            ) &
+        else
+            log_warn "nuclei not installed - skipping."
+        fi
     else
-        log_warn "nuclei not installed - skipping."
+        echo -e "\n[+] NUCLEI - CVE & DAST FINDINGS\n  Skipped in fast mode (ZAP-only fast scan)." >> "$nuclei_tmp"
     fi
+
+    # ZAP baseline runs in both fast and full mode
+    (
+        if [[ "$mode" == "fast" ]]; then
+            log_info "Running ZAP baseline (Docker) for fast scan (${zap_limit}s)..."
+        else
+            log_info "Running ZAP baseline (Docker) (${zap_limit}s)..."
+        fi
+        run_zap_baseline "$target" "$zap_tmp" "$zap_limit"
+    ) &
+
 
     if [[ "$mode" == "full" ]]; then
         if command -v dalfox &>/dev/null; then
@@ -334,7 +517,7 @@ run_vulns() {
             log_warn "nomore403 not installed - skipping."
         fi
 
-        if command -v subzy &>/dev/null && [[ -s "$subdomain_file" ]]; then
+                if command -v subzy &>/dev/null && [[ -s "$subdomain_file" ]]; then
             (
                 log_info "Checking for subdomain takeover (subzy)..."
                 {
@@ -346,6 +529,8 @@ run_vulns() {
                         2>/dev/null || echo "  No takeover candidates found or timed out."
                 } >> "$subzy_tmp"
             ) &
+        else
+            echo -e "\n[+] SUBDOMAIN TAKEOVER\n  No takeover candidates found, tool unavailable, or no subdomains were supplied." >> "$subzy_tmp"
         fi
 
         if command -v sqlmap &>/dev/null; then
@@ -405,10 +590,21 @@ run_vulns() {
     fi
 
     wait
+        # --- 4b. NORMALIZE EMPTY/QUIET TOOL OUTPUTS ---
+    ensure_tool_section_result "$nuclei_tmp" "NUCLEI - CVE & DAST FINDINGS" "Nuclei completed with no findings, timed out, or templates produced no matches."
+    ensure_tool_section_result "$zap_tmp" "ZAP BASELINE (Passive Scan)" "No ZAP findings captured."
+    ensure_tool_section_result "$sqlmap_tmp" "SQL INJECTION (SQLMap)" "No SQL injection found or timed out."
+    ensure_tool_section_result "$dalfox_tmp" "XSS (Dalfox)" "No XSS findings captured."
+    ensure_tool_section_result "$tinja_tmp" "SSTI (TInjA)" "No SSTI findings captured."
+    ensure_tool_section_result "$testssl_tmp" "SSL/TLS REPORT" "No SSL/TLS findings captured, timed out, or target was unreachable."
+    ensure_tool_section_result "$commix_tmp" "COMMAND INJECTION (Commix)" "No command injection found or timed out."
+    ensure_tool_section_result "$nomore403_tmp" "403 BYPASS ATTEMPTS" "No 403 bypass findings captured."
+    ensure_tool_section_result "$subzy_tmp" "SUBDOMAIN TAKEOVER" "No takeover candidates found, tool unavailable, or no subdomains were supplied."
 
     # --- 5. MERGE TOOL OUTPUTS ---
     cat \
         "$nuclei_tmp" \
+        "$zap_tmp" \
         "$sqlmap_tmp" \
         "$dalfox_tmp" \
         "$tinja_tmp" \
@@ -443,6 +639,7 @@ run_vulns() {
         "$vuln_targets" \
         "$param_targets" \
         "$nuclei_tmp" \
+        "$zap_tmp" \
         "$sqlmap_tmp" \
         "$dalfox_tmp" \
         "$tinja_tmp" \
@@ -454,3 +651,7 @@ run_vulns() {
 
     log_success "Vulnerability scan complete for $target."
 }
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    run_vulns "$1" "$2" "$3"
+fi

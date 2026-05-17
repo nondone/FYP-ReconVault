@@ -1,8 +1,8 @@
 #!/bin/bash
-# Path: /home/kali/ReconVault/modules/hosts.sh
+# Path: /home/hongxuan/ReconVault/modules/hosts.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RECON_HOME="/home/kali/ReconVault"
+RECON_HOME="/home/hongxuan/ReconVault"
 
 if [ -f "$SCRIPT_DIR/utils.sh" ]; then
     source "$SCRIPT_DIR/utils.sh"

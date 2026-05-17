@@ -29,9 +29,12 @@ run_subdomains() {
     local gobuster_limit="${GOBUSTER_TIMEOUT:-300}"
 
     local raw="$out/temp_subs.txt"
+    local raw_passive="$out/temp_subs_passive.txt"
+    local raw_bruteforce="$out/temp_subs_bruteforce.txt"
     local all_out="$out/subdomains_all.txt"
     local live_out="$out/subdomains_live.txt"
     local clean_out="$out/subdomains.txt"
+    local httpx_input="$out/temp_httpx_targets.txt"
 
     local wordlist
     if [ -f "$DICT_DIR/$dict_file" ]; then
@@ -45,43 +48,34 @@ run_subdomains() {
 
     mkdir -p "$out"
     : > "$raw"
+    : > "$raw_passive"
+    : > "$raw_bruteforce"
     : > "$all_out"
     : > "$live_out"
     : > "$clean_out"
+    : > "$httpx_input"
 
     log_info "Subdomain Discovery: target=$target | mode=$type | dict=$(basename "$wordlist") | limit=${user_limit}s"
-    log_info "Timeouts: subfinder=${subfinder_limit}s amass=${amass_limit}s gobuster=${gobuster_limit}s"
+    log_info "Timeouts: subfinder=${SUBFINDER_TIMEOUT}s amass=${AMASS_TIMEOUT}s gobuster=${GOBUSTER_TIMEOUT}s httpx=${HTTPX_TIMEOUT}s nuclei=${NUCLEI_TIMEOUT}s | limit=${user_limit}s"
 
     if [ "$type" == "passive" ]; then
         log_info "Mode: PASSIVE — running subfinder + amass passive (no brute-force)..."
 
         if [ -x "$SUBFINDER_BIN" ]; then
-            timeout "${subfinder_limit}s" "$SUBFINDER_BIN" -d "$target" -silent >> "$raw" 2>/dev/null || true
+            timeout "${subfinder_limit}s" "$SUBFINDER_BIN" -d "$target" -silent >> "$raw_passive" 2>/dev/null || true
         else
             log_warn "subfinder not found."
         fi
 
         if [ -x "$AMASS_BIN" ]; then
-            timeout "${amass_limit}s" "$AMASS_BIN" enum -d "$target" -passive >> "$raw" 2>/dev/null || true
+            timeout "${amass_limit}s" "$AMASS_BIN" enum -d "$target" -passive >> "$raw_passive" 2>/dev/null || true
         else
             log_warn "amass not found — passive amass skipped."
         fi
     else
-        log_info "Mode: ACTIVE — subfinder + amass + gobuster in parallel..."
+        log_info "Mode: ACTIVE — dictionary brute-force only (gobuster)..."
 
-        if [ -x "$SUBFINDER_BIN" ]; then
-            log_info "Launching subfinder (${subfinder_limit}s)..."
-            timeout "${subfinder_limit}s" "$SUBFINDER_BIN" -d "$target" -silent >> "$raw" 2>/dev/null &
-        else
-            log_warn "subfinder not found."
-        fi
-
-        if [ -x "$AMASS_BIN" ]; then
-            log_info "Launching amass passive (${amass_limit}s)..."
-            timeout "${amass_limit}s" "$AMASS_BIN" enum -d "$target" -passive >> "$raw" 2>/dev/null &
-        else
-            log_warn "amass not found — passive amass skipped."
-        fi
+        : > "$raw_passive"
 
         if [ -x "$GOBUSTER_BIN" ]; then
             local wl_lines
@@ -91,23 +85,74 @@ run_subdomains() {
                 --resolver 8.8.8.8 \
                 --domain "$target" \
                 -w "$wordlist" \
-                -t 100 >> "$raw" 2>/dev/null &
+                -t 100 >> "$raw_bruteforce" 2>/dev/null || true
         else
             log_warn "gobuster not found — DNS brute-force skipped."
         fi
 
-        wait
-        log_info "All discovery jobs finished. Deduplicating..."
+        if [[ -s "$raw_bruteforce" ]]; then
+            log_info "Active brute-force finished. Deduplicating..."
+        else
+            log_warn "Gobuster returned no subdomain candidates for $target."
+        fi
     fi
 
+    # Wildcard DNS check: if a random subdomain resolves, gobuster output is likely noisy
+    local wildcard_probe wildcard_hit
+    wildcard_probe="rvwild-$(date +%s)-$RANDOM.$target"
+    wildcard_hit=$(dig +short "$wildcard_probe" 2>/dev/null | grep -E '^[0-9.]+' | head -n1)
+
+    if [[ -n "$wildcard_hit" && -s "$raw_bruteforce" ]]; then
+        log_warn "Wildcard DNS detected for $target ($wildcard_probe -> $wildcard_hit). Ignoring gobuster brute-force results to reduce false positives."
+        : > "$raw_bruteforce"
+    fi
+
+    cat "$raw_passive" "$raw_bruteforce" > "$raw"
+
+    # Only keep gobuster brute-force results that actually resolve
+    if [[ -s "$raw_bruteforce" ]]; then
+        log_info "Validating gobuster brute-force candidates with DNS resolution..."
+        : > "$raw"
+        while IFS= read -r sub; do
+            sub=$(echo "$sub" \
+                | sed -E 's/\x1B\[[0-9;]*[A-Za-z]//g' \
+                | sed -E 's/Found://Ig' \
+                | sed -E 's#^\*\.##' \
+                | sed -E 's#^https?://##' \
+                | tr -d '\r' \
+                | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+                | awk '{print $1}' \
+                | sed -E 's#/.*$##' \
+                | sed -E 's/\.$//' \
+                | tr '[:upper:]' '[:lower:]')
+
+            [[ -z "$sub" ]] && continue
+
+            if dig +short "$sub" | grep -qE '^[0-9.]+'; then
+                echo "$sub" >> "$raw"
+            fi
+        done < "$raw_bruteforce"
+    fi
+
+    # --- 2. NORMALIZE ALL DISCOVERED SUBDOMAINS ---
     log_info "Raw subdomain lines collected: $(wc -l < "$raw" 2>/dev/null || echo 0)"
 
+    local target_escaped
+    target_escaped="${target//./\\.}"
+
     if [ -s "$raw" ]; then
-        sed 's/Found://g' "$raw" \
+        cat "$raw" \
+            | sed -E 's/\x1B\[[0-9;]*[A-Za-z]//g' \
+            | sed -E 's/Found://Ig' \
+            | sed -E 's#^\*\.##' \
+            | sed -E 's#^https?://##' \
             | tr -d '\r' \
-            | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
-            | grep -iE "([a-zA-Z0-9-]+\.)+${target//./\\.}$" \
+            | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
             | awk '{print $1}' \
+            | sed -E 's#/.*$##' \
+            | sed -E 's/\.$//' \
+            | tr '[:upper:]' '[:lower:]' \
+            | grep -Ei "^([a-z0-9_-]+\\.)+${target_escaped}$" \
             | sort -u > "$all_out"
     fi
 
@@ -124,11 +169,29 @@ run_subdomains() {
     log_info "Filtering to live web subdomains only (httpx)..."
 
     : > "$live_out"
+
+    local total
+    total=$(wc -l < "$all_out" 2>/dev/null || echo 0)
+
     if command -v httpx &>/dev/null; then
         local httpx_limit="${HTTPX_TIMEOUT:-60}"
 
-        # httpx returns full URLs; normalize to hostnames for downstream modules
-        timeout "${httpx_limit}s" httpx -l "$all_out" -silent 2>/dev/null \
+        # Avoid timing out on absurdly large noisy sets
+        if [[ "$total" -gt 2000 ]]; then
+            log_warn "Too many discovered subdomains ($total). Sampling 2000 targets randomly for live validation."
+            shuf "$all_out" | head -2000 > "$httpx_input"
+        else
+            cp "$all_out" "$httpx_input"
+        fi
+
+        timeout "$((httpx_limit + 60))s" httpx \
+            -l "$httpx_input" \
+            -silent \
+            -threads 100 \
+            -random-agent \
+            -follow-host-redirects \
+            -no-color \
+            2>/dev/null \
             | sed 's#https\?://##' \
             | cut -d/ -f1 \
             | tr -d '\r' \
@@ -144,14 +207,10 @@ run_subdomains() {
         done < "$all_out"
     fi
 
-
-
-
-    local total count_live
-    total=$(wc -l < "$all_out" 2>/dev/null || echo 0)
+    local count_live
     count_live=$(wc -l < "$live_out" 2>/dev/null || echo 0)
 
-    [ -f "$raw" ] && rm -f "$raw"
+    rm -f "$raw" "$raw_passive" "$raw_bruteforce" "$httpx_input"
     log_success "Found $total subdomains, $count_live live — dict: $(basename "$wordlist") — limit=${user_limit}s"
 }
 

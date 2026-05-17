@@ -1,10 +1,10 @@
 #!/bin/bash
 # Path: /home/kali/ReconVault/reconvault.sh
 # PATCH: Added $6 = dictionary file argument
- 
+
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULES_DIR="$BASE_DIR/modules"
- 
+
 if [ -f "$BASE_DIR/reconvault.cfg" ]; then
     source "$BASE_DIR/reconvault.cfg"
 else
@@ -45,8 +45,22 @@ UNIQUE_FOLDER=$(echo "$4" | tr -d '\r' | xargs)
 SCAN_LIMIT=$(echo "$5" | tr -d '\r' | xargs)
 DICT_FILE=$(echo "$6" | tr -d '\r' | xargs)  # ← ADD THIS LINE
 
+# NEW: Read subdomain recon mode from environment, default active
+SUBDOMAIN_SCAN_MODE=$(echo "${SUBDOMAIN_MODE:-${SUBDOMAIN_RECON_MODE:-active}}" | tr -d '\r' | xargs | tr '[:upper:]' '[:lower:]')
+if [[ "$SUBDOMAIN_SCAN_MODE" != "active" && "$SUBDOMAIN_SCAN_MODE" != "passive" ]]; then
+    SUBDOMAIN_SCAN_MODE="active"
+fi
+
 # Automatically strip protocol and www
-TARGET=$(echo "$TARGET_RAW" | sed -e 's|^[^/]*//||' -e 's|^www\.||' -e 's|/.*$||')
+# Strip protocol + path/query, keep host:port intact
+# Automatically strip protocol and www
+TARGET=$(echo "$TARGET_RAW" | sed -E 's#^https?://##; s#/.*$##')
+TARGET="${TARGET#www.}"
+
+# Remove leading www. only for domains (not for IPs)
+if [[ "$TARGET" =~ ^www\. ]]; then
+    TARGET="${TARGET#www.}"
+fi
 
 [ -z "$MODE" ] && MODE="fast"
 [ -z "$UNIQUE_FOLDER" ] && UNIQUE_FOLDER="$TARGET"
@@ -76,7 +90,8 @@ log_info "Mode         : $MODE"
 log_info "Modules      : ${MODULES_LIST:-all}"
 log_info "Output dir   : $OUTPUT_DIR"
 log_info "Timeout limit: ${SCAN_LIMIT}s"
-log_info "Dictionary   : $DICT_FILE"   
+log_info "Dictionary   : $DICT_FILE"
+log_info "SubdomainMode: $SUBDOMAIN_SCAN_MODE"
 check_dependencies
 echo ""
 
@@ -105,17 +120,17 @@ if [ "$MODE" == "fast" ]; then
 
 elif [ "$MODE" == "full" ]; then
     log_section "FULL SCAN — Modules: $MODULES_LIST"
- 
+
     # Subdomains
-  if [[ "$MODULES_LIST" == *"subdomains"* ]]; then
-        log_info "Running subdomains (active) with dict: $DICT_FILE"
-        run_subdomains "$TARGET" "$OUTPUT_DIR" "active" "$SCAN_LIMIT" "$DICT_FILE"
-  else
-      echo "Skipped (Deselected)" > "$OUTPUT_DIR/subdomains.txt"
-      echo "Skipped (Deselected)" > "$OUTPUT_DIR/subdomains_all.txt"
-      echo "Skipped (Deselected)" > "$OUTPUT_DIR/subdomains_live.txt"
-  fi
- 
+    if [[ "$MODULES_LIST" == *"subdomains"* ]]; then
+        log_info "Running subdomains ($SUBDOMAIN_SCAN_MODE) with dict: $DICT_FILE"
+        run_subdomains "$TARGET" "$OUTPUT_DIR" "$SUBDOMAIN_SCAN_MODE" "$SCAN_LIMIT" "$DICT_FILE"
+    else
+        echo "Skipped (Deselected)" > "$OUTPUT_DIR/subdomains.txt"
+        echo "Skipped (Deselected)" > "$OUTPUT_DIR/subdomains_all.txt"
+        echo "Skipped (Deselected)" > "$OUTPUT_DIR/subdomains_live.txt"
+    fi
+
     # Hosts
     if [[ "$MODULES_LIST" == *"hosts"* ]]; then
         log_info "Running host analysis..."
@@ -128,7 +143,7 @@ elif [ "$MODE" == "full" ]; then
         echo "Skipped (Deselected)" > "$OUTPUT_DIR/hosts_detail.txt"
         log_warn "Hosts module skipped."
     fi
- 
+
     # Web
     if [[ "$MODULES_LIST" == *"web"* ]]; then
         log_info "Running web analysis..."
@@ -137,7 +152,7 @@ elif [ "$MODE" == "full" ]; then
         echo "Skipped (Deselected)" > "$OUTPUT_DIR/web.txt"
         log_warn "Web module skipped."
     fi
- 
+
     # OSINT
     if [[ "$MODULES_LIST" == *"osint"* ]]; then
         log_info "Running OSINT (full)..."
@@ -156,7 +171,7 @@ elif [ "$MODE" == "full" ]; then
         echo "Skipped (Deselected)" > "$OUTPUT_DIR/parameters.txt"
         log_warn "Paramining module skipped."
     fi
- 
+
     # Vulnerabilities
     if [[ "$MODULES_LIST" == *"vulns"* ]]; then
         log_info "Running vulnerability scan..."
@@ -165,18 +180,18 @@ elif [ "$MODE" == "full" ]; then
         echo "Skipped (Deselected)" > "$OUTPUT_DIR/vulns.txt"
         log_warn "Vulns module skipped."
     fi
- 
+
 else
     log_error "Unknown mode '$MODE'. Use 'fast' or 'full'."
     exit 1
 fi
- 
+
 # --- 7. FINAL PACKAGING ---
 log_section "Packaging all results"
 save_json "$OUTPUT_DIR"
- 
+
 # Cleanup temp
 rm -rf "$OUTPUT_DIR/temp"
- 
+
 log_success "[SUCCESS] Scan complete for $TARGET"
 log_info "Report saved to: $OUTPUT_DIR/reconvault_report.json"

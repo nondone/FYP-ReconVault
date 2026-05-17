@@ -1,8 +1,7 @@
 #!/bin/bash
 # modules/osint.sh
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/utils.sh"
+source /home/hongxuan/ReconVault/modules/utils.sh
 
 run_osint() {
     local target=$1
