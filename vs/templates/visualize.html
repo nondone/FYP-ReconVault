@@ -61,6 +61,22 @@
                 <div id="kpiParamTotal" class="value" style="color:#f85149;">0</div>
                 <div class="sub">Distinct high-risk parameter names found in mining output.</div>
             </div>
+            <div class="rv-kpi">
+                <div class="label">
+                    <span>OWASP Categories</span>
+                    <span class="rv-badge">Top 10</span>
+                </div>
+                <div class="value" style="color:#ffb86b;">{{ chart_data.owasp_category_count }}</div>
+                <div class="sub">Distinct OWASP Top 10 categories mapped from vulnerability evidence.</div>
+            </div>
+            <div class="rv-kpi">
+                <div class="label">
+                    <span>OWASP Findings</span>
+                    <span class="rv-badge">Mapped</span>
+                </div>
+                <div class="value" style="color:#ff7b72;">{{ chart_data.owasp_finding_count }}</div>
+                <div class="sub">Total OWASP-mapped finding lines extracted from the vulnerability report.</div>
+            </div>
         </div>
     </div>
 
@@ -69,7 +85,7 @@
             <div class="dot" id="rvStoryDot"></div>
             <div>
                 <div class="title" id="rvStoryTitle">Attack Surface Snapshot</div>
-                <div class="body" id="rvStoryBody">This dashboard turns your scan into two visuals: coverage (DNS vs Web) and high-risk parameter signals.</div>
+                <div class="body" id="rvStoryBody">This dashboard turns your scan into coverage, OWASP Top 10 risk mapping, and high-risk parameter signals.</div>
             </div>
         </div>
     </div>
@@ -108,6 +124,45 @@
             </div>
             <div class="text-secondary small mt-2">
                 Distribution is parsed from the <code>=== OWASP TOP 25 HIGH-RISK PARAMETERS ===</code> section.
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="custom-card border-top border-danger border-4 h-100">
+            <div class="rv-card-head">
+                <div class="result-label text-danger mb-0">
+                    <i class="fas fa-shield-halved"></i> OWASP Top 10 Distribution
+                </div>
+                <div class="rv-mini-actions">
+                    <button type="button" class="rv-mini-btn" onclick="downloadChartPng('owaspPieChart','owasp-top-10-distribution')">Download PNG</button>
+                </div>
+            </div>
+            <div class="p-2">
+                <canvas id="owaspPieChart" height="140"></canvas>
+            </div>
+            <div class="text-secondary small mt-2">
+                Categories are parsed from <code>[OWASP:Axx:2021]</code> evidence lines in the vulnerability output.
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="custom-card border-top border-danger border-4 h-100">
+            <div class="rv-card-head">
+                <div class="result-label text-danger mb-0">
+                    <i class="fas fa-list-check"></i> OWASP Top 10 Findings
+                </div>
+                <div class="rv-mini-actions">
+                    <button type="button" class="rv-mini-btn" onclick="copyList('owaspListBody')">Copy</button>
+                </div>
+            </div>
+            <div class="rv-list">
+                <div class="rv-list-toolbar">
+                    <input id="owaspSearch" class="rv-input" placeholder="Search OWASP code or detail (e.g. A05, CSP, misconfiguration)..." />
+                    <span id="owaspCountBadge" class="rv-badge">0 findings</span>
+                </div>
+                <div id="owaspListBody" class="rv-list-body">No OWASP Top 10 findings.</div>
             </div>
         </div>
     </div>
@@ -161,6 +216,7 @@
 <script>
     const CHART_DATA = JSON.parse(document.getElementById('rvChartData')?.textContent || "{}");
     const REPORT = JSON.parse(document.getElementById('rvReportData')?.textContent || "{}");
+    const OWASP_FINDINGS = {{ owasp_findings|tojson }};
 
     function togglePresenterMode() {
         document.body.classList.toggle('rv-present');
@@ -234,12 +290,21 @@
     function renderList(bodyEl, items, kind) {
         if (!bodyEl) return;
         if (!items || items.length === 0) {
-            bodyEl.textContent = 'No data.';
+            bodyEl.textContent = kind === 'owasp' ? 'No OWASP Top 10 findings.' : 'No data.';
             return;
         }
         if (kind === 'kv') {
             bodyEl.innerHTML = items.map(it => (
                 `<div class="rv-row"><div class="k" title="${it.k}">${it.k}</div><div class="v">${it.v}</div></div>`
+            )).join('');
+            return;
+        }
+        if (kind === 'owasp') {
+            bodyEl.innerHTML = items.map(it => (
+                `<div class="rv-row rv-row-stack">
+                    <div class="k" title="${it.code} ${it.title}">${it.code} - ${it.title}</div>
+                    <div class="rv-owasp-detail" title="${it.detail}">${it.detail}</div>
+                </div>`
             )).join('');
             return;
         }
@@ -366,6 +431,78 @@
         });
     })();
 
+    // Pie: OWASP Top 10 distribution
+    (function () {
+        const ctx = document.getElementById('owaspPieChart');
+        if (!ctx) return;
+
+        const labels = CHART_DATA.owasp_labels || [];
+        const values = CHART_DATA.owasp_values || [];
+
+        const hasData = labels.length > 0 && values.length > 0;
+        const finalLabels = hasData ? labels : ['No data'];
+        const finalValues = hasData ? values : [1];
+
+        const colors = [
+            'rgba(248,81,73,0.75)',
+            'rgba(255,123,114,0.68)',
+            'rgba(210,153,34,0.68)',
+            'rgba(88,166,255,0.70)',
+            'rgba(63,185,80,0.70)',
+            'rgba(163,113,247,0.66)',
+            'rgba(255,211,106,0.66)',
+            'rgba(121,192,255,0.66)',
+            'rgba(139,148,158,0.55)'
+        ];
+
+        const centerText = {
+            id: 'owaspCenterText',
+            afterDraw(chart, args, opts) {
+                const { ctx, chartArea } = chart;
+                if (!chartArea) return;
+                const x = (chartArea.left + chartArea.right) / 2;
+                const y = (chartArea.top + chartArea.bottom) / 2;
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = 'rgba(230,237,243,0.95)';
+                ctx.font = '800 18px Inter, system-ui, sans-serif';
+                ctx.fillText(String(opts?.title || 'OWASP'), x, y - 10);
+                ctx.fillStyle = 'rgba(139,148,158,0.95)';
+                ctx.font = '700 12px Inter, system-ui, sans-serif';
+                ctx.fillText(String(opts?.subtitle || ''), x, y + 12);
+                ctx.restore();
+            }
+        };
+
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: finalLabels,
+                datasets: [{
+                    data: finalValues,
+                    backgroundColor: finalLabels.map((_, i) => colors[i % colors.length]),
+                    borderColor: 'rgba(255,255,255,0.10)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '62%',
+                plugins: {
+                    owaspCenterText: {
+                        title: hasData ? 'OWASP' : 'No data',
+                        subtitle: hasData ? `${CHART_DATA.owasp_category_count || 0} categories` : ''
+                    },
+                    legend: { position: 'bottom', labels: { color: '#8b949e', boxWidth: 12 } },
+                    tooltip: { enabled: true }
+                }
+            },
+            plugins: [centerText]
+        });
+    })();
+
     // Lists + KPIs
     (function () {
         const coverage = calcCoverage(CHART_DATA.live_dns, CHART_DATA.live_web);
@@ -405,6 +542,11 @@
             } else {
                 body.textContent += ` No OWASP Top 25 parameter signals were found in the mining output.`;
             }
+            if ((CHART_DATA.owasp_category_count || 0) > 0) {
+                body.textContent += ` OWASP Top 10 mapping identified ${CHART_DATA.owasp_category_count} category${CHART_DATA.owasp_category_count === 1 ? '' : 'ies'} across ${CHART_DATA.owasp_finding_count || 0} finding line${CHART_DATA.owasp_finding_count === 1 ? '' : 's'}.`;
+            } else {
+                body.textContent += ` No OWASP Top 10 mapping was identified in the vulnerability output.`;
+            }
         }
 
         const paramBody = document.getElementById('paramListBody');
@@ -420,6 +562,28 @@
                 paramCurrent = !q ? params : params.filter(x => x.k.includes(q));
                 renderList(paramBody, paramCurrent, 'kv');
                 if (paramBadge) paramBadge.textContent = `${paramCurrent.length} items`;
+            });
+        }
+
+        const owaspBody = document.getElementById('owaspListBody');
+        const owaspBadge = document.getElementById('owaspCountBadge');
+        const owaspSearch = document.getElementById('owaspSearch');
+        let owaspCurrent = Array.isArray(OWASP_FINDINGS) ? OWASP_FINDINGS : [];
+        renderList(owaspBody, owaspCurrent, 'owasp');
+        if (owaspBadge) owaspBadge.textContent = `${owaspCurrent.length} findings`;
+
+        if (owaspSearch) {
+            owaspSearch.addEventListener('input', () => {
+                const q = (owaspSearch.value || '').trim().toLowerCase();
+                owaspCurrent = !q
+                    ? (Array.isArray(OWASP_FINDINGS) ? OWASP_FINDINGS : [])
+                    : (Array.isArray(OWASP_FINDINGS) ? OWASP_FINDINGS : []).filter(x =>
+                        String(x.code || '').toLowerCase().includes(q) ||
+                        String(x.title || '').toLowerCase().includes(q) ||
+                        String(x.detail || '').toLowerCase().includes(q)
+                    );
+                renderList(owaspBody, owaspCurrent, 'owasp');
+                if (owaspBadge) owaspBadge.textContent = `${owaspCurrent.length} findings`;
             });
         }
 
@@ -442,5 +606,3 @@
     })();
 </script>
 {% endblock %}
-
-</div>

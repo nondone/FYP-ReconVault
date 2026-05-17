@@ -1,6 +1,6 @@
 {
     "theme_mode": true,
-    "language": "Mandarin",
+    "language": "English",
     "notifications": true,
     "auto_scan": true,
     "ssl_verification": true,
@@ -8,10 +8,10 @@
     "data_encryption": true,
     "scan_timeout": 400,
     "max_retries": 1,
-    "threat_level": "medium",
-    "subfinder_timeout": 120,
-    "amass_timeout": 120,
-    "gobuster_timeout": 180,
-    "httpx_timeout": 180,
-    "nuclei_timeout": 90
+    "threat_level": "high",
+    "subfinder_timeout": 180,
+    "amass_timeout": 180,
+    "gobuster_timeout": 300,
+    "httpx_timeout": 90,
+    "nuclei_timeout": 120
 }

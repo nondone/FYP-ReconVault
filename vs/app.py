@@ -1,6 +1,17 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+﻿from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_mysqldb import MySQL
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash, Response
+from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for, current_app
+from flask import session, redirect, url_for, flash
+from flask import send_file
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
+from web_security.web_security import login_required, start_user_session
+from collections import deque
+from docxtpl import DocxTemplate
+from urllib.parse import quote
+from datetime import datetime
 import subprocess
 import json
 import os
@@ -8,34 +19,22 @@ import datetime
 import requests
 import shutil
 import concurrent.futures
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash, Response
 import re
 import threading
 import time
-import sys
-from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for, current_app
-sys.path.append(os.path.join(os.getcwd(), 'Web Security'))
-from web_security.web_security import login_required, start_user_session
-import stat
-from flask import session, redirect, url_for, flash
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import paramiko
-from flask import Flask, request, jsonify
-from flask_cors import CORS
 import posixpath
 import shlex
 import uuid
-from collections import deque
 import hashlib
 import tempfile
-from datetime import datetime
-from flask import send_file
 import pdfkit
 import base64
-from docxtpl import DocxTemplate
-from urllib.parse import quote
-
+import sys
+sys.path.append(os.path.join(os.getcwd(), 'Web Security'))
+import stat
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 app = Flask(__name__)
@@ -49,26 +48,6 @@ KALI_IP = "100.67.33.44"
 KALI_USER = "kali"
 KALI_PASS = "kali"
 KALI_ALLOWED_BASE = "/home/kali/ReconVault"
-
-
-def normalize_kali_path(path_value: str) -> str:
-    if not path_value:
-        return KALI_ALLOWED_BASE
-    normalized = posixpath.normpath(path_value)
-    if not normalized.startswith("/"):
-        normalized = posixpath.join(KALI_ALLOWED_BASE, normalized)
-        normalized = posixpath.normpath(normalized)
-    return normalized
-
-
-def is_allowed_kali_path(path_value: str) -> bool:
-    normalized = normalize_kali_path(path_value)
-    return normalized == KALI_ALLOWED_BASE or normalized.startswith(KALI_ALLOWED_BASE + "/")
-
-
-def safe_shell_single_quote(value: str) -> str:
-    return "'" + value.replace("'", "'\"'\"'") + "'"
-
 
 
 # --- DATABASE CONFIGURATION ---
@@ -138,6 +117,228 @@ if not os.path.exists(SETTINGS_FILE):
         json.dump(default_settings, f, indent=4)
 
 
+# --- 1. UTILITIES and security configuration ---
+def normalize_kali_path(path_value: str) -> str:
+    if not path_value:
+        return KALI_ALLOWED_BASE
+    normalized = posixpath.normpath(path_value)
+    if not normalized.startswith("/"):
+        normalized = posixpath.join(KALI_ALLOWED_BASE, normalized)
+        normalized = posixpath.normpath(normalized)
+    return normalized
+
+
+def is_allowed_kali_path(path_value: str) -> bool:
+    normalized = normalize_kali_path(path_value)
+    return normalized == KALI_ALLOWED_BASE or normalized.startswith(KALI_ALLOWED_BASE + "/")
+
+
+def safe_shell_single_quote(value: str) -> str:
+    return "'" + value.replace("'", "'\"'\"'") + "'"
+
+
+# --- 1. UTILITIES ---
+def normalize_to_scan_root(host: str) -> str:
+    """
+    Convert any subdomain input to scan root domain.
+    Example:
+      eprints.utar.edu.my -> utar.edu.my
+      api.example.com     -> example.com
+    """
+    if not host:
+        return ""
+
+    host = host.strip(".")
+    parts = host.split(".")
+
+    if len(parts) <= 2:
+        return host
+
+    # Common multi-level public suffixes that need 3 labels for root domain
+    multi_level_suffixes = {
+        "com.my", "edu.my", "gov.my", "org.my", "net.my",
+        "com.sg", "com.au", "net.au", "org.au",
+        "co.uk", "org.uk", "ac.uk", "gov.uk",
+        "co.jp", "co.kr", "co.in"
+    }
+
+    suffix2 = ".".join(parts[-2:])
+
+    # If suffix is multi-level (e.g. edu.my), keep last 3 labels.
+    if suffix2 in multi_level_suffixes and len(parts) >= 3:
+        return ".".join(parts[-3:])
+
+    # Default root domain = last 2 labels
+    return ".".join(parts[-2:])
+
+
+def is_ipv4_host(value: str) -> bool:
+    """
+    True for IPv4 inputs with optional port.
+    Examples:
+      172.17.0.2
+      172.17.0.2:3000
+    """
+    if not value:
+        return False
+    host_part = value.split(":", 1)[0]
+    if not re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}", host_part):
+        return False
+    try:
+        return all(0 <= int(o) <= 255 for o in host_part.split("."))
+    except Exception:
+        return False
+
+
+def is_passthrough_host(value: str) -> bool:
+    """
+    Hostnames that should bypass root-domain normalization entirely.
+    """
+    if not value:
+        return False
+    host_part = value.split(":", 1)[0].strip().lower()
+    return host_part in {"localhost", "host.docker.internal", "docker.internal"}
+
+
+def normalize_selected_modules(raw_modules) -> str:
+    """
+    Keep module order stable, remove duplicates, and automatically insert `web`
+    when downstream modules depend on reachable targets from subdomain discovery.
+    """
+    if isinstance(raw_modules, str):
+        parts = [p.strip() for p in raw_modules.split(",") if p.strip()]
+    elif isinstance(raw_modules, (list, tuple, set)):
+        parts = [str(p).strip() for p in raw_modules if str(p).strip()]
+    else:
+        parts = []
+
+    seen = set()
+    ordered = []
+    for item in parts:
+        if item not in seen:
+            seen.add(item)
+            ordered.append(item)
+
+    if "subdomains" in ordered and (("paramining" in ordered) or ("vulns" in ordered)) and "web" not in ordered:
+        insert_at = ordered.index("subdomains") + 1
+        ordered.insert(insert_at, "web")
+
+    return ",".join(ordered)
+
+
+def normalize_target_for_scan(raw_target: str) -> str:
+    cleaned = clean_target(raw_target)
+    if is_ipv4_host(cleaned) or is_passthrough_host(cleaned):
+        return cleaned
+    if (
+        cleaned.endswith(".herokuapp.com")
+        or cleaned.endswith(".up.railway.app")
+        or cleaned.endswith(".railway.app")
+    ):
+        return cleaned
+    return normalize_to_scan_root(cleaned)
+
+
+def clean_target(target):
+    if not target:
+        return ""
+
+    target = target.strip().lower()
+    target = re.sub(r"^https?://", "", target)
+    target = re.sub(r"^www\.", "", target)
+
+    # Keep only host, remove path and query
+    target = target.split("/")[0].split("?")[0].split("#")[0]
+
+    # If the user inputs host:PORT, keep the port
+    host_part = target
+    port_part = ""
+    if ":" in target:
+        host_part, port_part = target.rsplit(":", 1)
+        if not port_part.isdigit():
+            host_part = target
+            port_part = ""
+
+    is_ipv4 = bool(re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}", host_part))
+
+    if is_ipv4:
+        try:
+            octets_ok = all(0 <= int(o) <= 255 for o in host_part.split("."))
+        except Exception:
+            octets_ok = False
+
+        if octets_ok:
+            safe = "".join([c for c in host_part if c.isalnum() or c in ".-"])
+            safe = safe.encode("ascii", "ignore").decode().strip(" .-")
+            return f"{safe}:{port_part}" if port_part else safe
+
+    safe_host = "".join([c for c in host_part if c.isalnum() or c in ".-"])
+    safe_host = safe_host.encode("ascii", "ignore").decode().strip(" .-")
+    if not safe_host:
+        return ""
+
+    if is_passthrough_host(safe_host):
+        return f"{safe_host}:{port_part}" if port_part else safe_host
+
+    # Keep hosted app full subdomain intact
+    if (
+        safe_host.endswith(".herokuapp.com")
+        or safe_host.endswith(".up.railway.app")
+        or safe_host.endswith(".railway.app")
+    ):
+        return f"{safe_host}:{port_part}" if port_part else safe_host
+
+    safe_host = normalize_to_scan_root(safe_host)
+    return f"{safe_host}:{port_part}" if port_part else safe_host
+
+
+
+def get_available_dicts():
+    """
+    Lists .txt wordlist files available in the Kali dictionary folder.
+    Returns a list of dicts: [{"filename": "dns_list.txt", "label": "dns_list (5k)"}]
+    Falls back to hardcoded defaults if the folder is unreadable.
+    """
+    defaults = [
+        {"filename": "dns_list.txt",         "label": "dns_list (default)"},
+        {"filename": "dns_big.txt",          "label": "dns_big (large)"},
+    ]
+    try:
+        result = subprocess.run(
+            ["wsl", "ls", WSL_DICT_DIR],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode != 0:
+            return defaults
+ 
+        files = []
+        for fname in sorted(result.stdout.splitlines()):
+            fname = fname.strip()
+            if not fname.endswith(".txt"):
+                continue
+            # Get line count for the label
+            wc = subprocess.run(
+                ["wsl", "wc", "-l", f"{WSL_DICT_DIR}/{fname}"],
+                capture_output=True, text=True, timeout=5
+            )
+            count = wc.stdout.strip().split()[0] if wc.returncode == 0 else "?"
+            label = f"{fname.replace('.txt','')} ({count} entries)"
+            files.append({"filename": fname, "label": label})
+ 
+        return files if files else defaults
+    except Exception:
+        return defaults
+ 
+ 
+# 2. Add this route so the frontend can fetch the list via JS (optional):
+ 
+@app.route('/api/v1/dictionaries')
+@login_required
+def list_dictionaries():
+    return jsonify({"dictionaries": get_available_dicts()})
+
+
+
 
 # ---Sandbox---
 @app.route('/file-scan')
@@ -150,6 +351,8 @@ def file_scan_page():
         return redirect(url_for('view_scan'))
 
     return render_template('fileScan.html', result=file_scan_result)
+
+
 
 @app.route('/scan_file', methods=['POST'])
 @login_required
@@ -329,9 +532,8 @@ def handle_remote_scan():
 
 
 
-# --- 2. STREAMING KALI RECON ENGINE ---
+# --- 2. STREAMING SSH KALI RECON ENGINE ---
 # app.py (/stream_kali_recon) WHOLE FUNCTION
-
 @app.route('/stream_kali_recon')
 def stream_kali_recon():
     if 'logged_in' not in session:
@@ -340,10 +542,10 @@ def stream_kali_recon():
     app_instance = current_app._get_current_object()
 
     raw_target = request.args.get('target', '')
-    target = normalize_to_scan_root(clean_target(raw_target))
+    target = normalize_target_for_scan(raw_target)
     mode = request.args.get('mode', 'full')
     raw_modules = request.args.get('modules', 'osint,subdomains,hosts')
-    modules_arg = ",".join(raw_modules) if isinstance(raw_modules, list) else raw_modules
+    modules_arg = normalize_selected_modules(raw_modules)
     timeout_arg = request.args.get('timeout')
     if timeout_arg and str(timeout_arg).strip().isdigit():
         scan_limit = int(timeout_arg)
@@ -359,6 +561,9 @@ def stream_kali_recon():
     dict_file = os.path.basename(request.args.get('dict_file', 'dns_list.txt'))
     if not dict_file.endswith('.txt'):
         dict_file = 'dns_list.txt'
+    subdomain_mode = request.args.get('subdomain_mode', 'active').strip().lower()
+    if subdomain_mode not in ('active', 'passive'):
+        subdomain_mode = 'active'
 
     user_id = session.get('user_id', 'anon')
     unique_folder = f"{user_id}_{target.replace('.', '_')}"
@@ -381,7 +586,7 @@ def stream_kali_recon():
             yield ": heartbeat\n\n"
             yield emit(f"[SCAN] Requested target: {raw_target or '-'}", 2)
             yield emit(f"[TARGET] normalized: {raw_target} -> {target}", 3)
-            yield emit(f"[SCAN] Mode={mode} | Modules={modules_arg} | Dict={dict_file} | Limit={scan_limit}s", 4)
+            yield emit(f"[SCAN] Mode={mode} | Modules={modules_arg} | Dict={dict_file} | SubdomainMode={subdomain_mode} | Limit={scan_limit}s", 4)
             yield emit(f"[SSH] Connecting to Kali at {KALI_USER}@{KALI_IP}...", 5)
 
 
@@ -427,7 +632,9 @@ def stream_kali_recon():
                 f"AMASS_TIMEOUT={amass_timeout} "
                 f"GOBUSTER_TIMEOUT={gobuster_timeout} "
                 f"HTTPX_TIMEOUT={httpx_timeout} "
-                f"NUCLEI_TIMEOUT={nuclei_timeout}; "
+                f"NUCLEI_TIMEOUT={nuclei_timeout} "
+                f"SUBDOMAIN_MODE={subdomain_mode} "
+                f"SUBDOMAIN_RECON_MODE={subdomain_mode}; "
                 f"cd /home/kali/ReconVault && "
                 f"stdbuf -oL -eL bash reconvault.sh {target} {mode} '{modules_arg}' {unique_folder} {scan_limit} '{dict_file}' 2>&1"
             )
@@ -756,20 +963,10 @@ def logout():
 
 
 
-@app.route('/delete_report/<int:report_id>', methods=['POST'])
-def delete_report(report_id):
-    if 'logged_in' not in session:
-        return redirect(url_for('login'))
-
+def _delete_report_for_user(report_id, user_id):
     try:
-        user_id = int(session.get('user_id'))
-    except (ValueError, TypeError):
-        return redirect(url_for('login'))
-
-    cur = mysql.connection.cursor()
-    WSL_OUTPUT_DIR = "/home/hongxuan/ReconVault/output"
-
-    try:
+        cur = mysql.connection.cursor()
+        WSL_OUTPUT_DIR = "/home/hongxuan/ReconVault/output"
         cur.execute("SELECT target FROM reports WHERE id = %s AND user_id = %s", (report_id, user_id))
         report = cur.fetchone()
 
@@ -808,18 +1005,82 @@ def delete_report(report_id):
                 print(f"[DEBUG] Kali SSH deleted folder: {remote_folder}")
             except Exception as e:
                 print(f"[WARN] Kali SSH delete skipped/failed: {e}")
-
-            flash(f"Report for {target_domain} deleted.", "success")
+            return True, target_domain
         else:
             print(f"[AUTH ERROR] No match for Report {report_id} and User {user_id}")
-            flash("Report not found or unauthorized.", "danger")
+            return False, None
 
     except Exception as e:
         mysql.connection.rollback()
         print(f"[SYSTEM ERROR] {e}")
-        flash(f"Error: {e}", "danger")
+        raise
     finally:
         cur.close()
+
+
+@app.route('/delete_report/<int:report_id>', methods=['POST'])
+def delete_report(report_id):
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+
+    try:
+        user_id = int(session.get('user_id'))
+    except (ValueError, TypeError):
+        return redirect(url_for('login'))
+
+    try:
+        ok, target_domain = _delete_report_for_user(report_id, user_id)
+        if ok and target_domain:
+            flash(f"Report for {target_domain} deleted.", "success")
+        else:
+            flash("Report not found or unauthorized.", "danger")
+    except Exception as e:
+        print(f"[SYSTEM ERROR] {e}")
+        flash(f"Error: {e}", "danger")
+
+    return redirect(url_for('reports_page'))
+
+
+@app.route('/delete_reports_bulk', methods=['POST'])
+@login_required
+def delete_reports_bulk():
+    if 'logged_in' not in session:
+        return redirect(url_for('login'))
+
+    try:
+        user_id = int(session.get('user_id'))
+    except (ValueError, TypeError):
+        return redirect(url_for('login'))
+
+    raw_ids = request.form.getlist('report_ids')
+    selected_ids = []
+    for rid in raw_ids:
+        rid = str(rid).strip()
+        if rid.isdigit():
+            selected_ids.append(int(rid))
+
+    if not selected_ids:
+        flash("No reports were selected for deletion.", "warning")
+        return redirect(url_for('reports_page'))
+
+    deleted_targets = []
+    failed_count = 0
+
+    for rid in selected_ids:
+        try:
+            ok, target_domain = _delete_report_for_user(rid, user_id)
+            if ok and target_domain:
+                deleted_targets.append(target_domain)
+            else:
+                failed_count += 1
+        except Exception as e:
+            print(f"[SYSTEM ERROR] Bulk delete failed for report {rid}: {e}")
+            failed_count += 1
+
+    if deleted_targets:
+        flash(f"Deleted {len(deleted_targets)} selected report(s).", "success")
+    if failed_count:
+        flash(f"{failed_count} selected report(s) could not be deleted.", "warning")
 
     return redirect(url_for('reports_page'))
 
@@ -935,115 +1196,6 @@ def index():
 
 
 
-# --- 1. UTILITIES ---
-# --- 1. UTILITIES ---
-def normalize_to_scan_root(host: str) -> str:
-    """
-    Convert any subdomain input to scan root domain.
-    Example:
-      eprints.utar.edu.my -> utar.edu.my
-      api.example.com     -> example.com
-    """
-    if not host:
-        return ""
-
-    host = host.strip(".")
-    parts = host.split(".")
-
-    if len(parts) <= 2:
-        return host
-
-    # Common multi-level public suffixes that need 3 labels for root domain
-    multi_level_suffixes = {
-        "com.my", "edu.my", "gov.my", "org.my", "net.my",
-        "com.sg", "com.au", "net.au", "org.au",
-        "co.uk", "org.uk", "ac.uk", "gov.uk",
-        "co.jp", "co.kr", "co.in"
-    }
-
-    suffix2 = ".".join(parts[-2:])
-
-    # If suffix is multi-level (e.g. edu.my), keep last 3 labels.
-    if suffix2 in multi_level_suffixes and len(parts) >= 3:
-        return ".".join(parts[-3:])
-
-    # Default root domain = last 2 labels
-    return ".".join(parts[-2:])
-
-
-def clean_target(target):
-    if not target:
-        return ""
-
-    target = target.strip().lower()
-    target = re.sub(r"^https?://", "", target)
-    target = re.sub(r"^www\.", "", target)
-
-    # Keep only host, remove path and query
-    target = target.split("/")[0].split("?")[0].split("#")[0]
-
-    # Remove port if provided (example.com:8080 -> example.com)
-    if ":" in target:
-        target = target.split(":")[0]
-
-    # Keep safe host characters only
-    target = "".join([c for c in target if c.isalnum() or c in ".-"])
-    target = target.encode("ascii", "ignore").decode().strip(" .-")
-
-    # Force scan root domain so brute-force starts correctly
-    target = normalize_to_scan_root(target)
-
-    return target
-
-
-
-
-def get_available_dicts():
-    """
-    Lists .txt wordlist files available in the Kali dictionary folder.
-    Returns a list of dicts: [{"filename": "dns_list.txt", "label": "dns_list (5k)"}]
-    Falls back to hardcoded defaults if the folder is unreadable.
-    """
-    defaults = [
-        {"filename": "dns_list.txt",         "label": "dns_list (default)"},
-        {"filename": "dns_big.txt",          "label": "dns_big (large)"},
-    ]
-    try:
-        result = subprocess.run(
-            ["wsl", "ls", WSL_DICT_DIR],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.returncode != 0:
-            return defaults
- 
-        files = []
-        for fname in sorted(result.stdout.splitlines()):
-            fname = fname.strip()
-            if not fname.endswith(".txt"):
-                continue
-            # Get line count for the label
-            wc = subprocess.run(
-                ["wsl", "wc", "-l", f"{WSL_DICT_DIR}/{fname}"],
-                capture_output=True, text=True, timeout=5
-            )
-            count = wc.stdout.strip().split()[0] if wc.returncode == 0 else "?"
-            label = f"{fname.replace('.txt','')} ({count} entries)"
-            files.append({"filename": fname, "label": label})
- 
-        return files if files else defaults
-    except Exception:
-        return defaults
- 
- 
-# 2. Add this route so the frontend can fetch the list via JS (optional):
- 
-@app.route('/api/v1/dictionaries')
-@login_required
-def list_dictionaries():
-    return jsonify({"dictionaries": get_available_dicts()})
-
-
-
 
 # --- 1. MAIN VIEW ROUTE ---
 @app.route('/scan')
@@ -1056,7 +1208,7 @@ def view_scan():
 
     report_id = (request.args.get('report_id') or '').strip()
     target = request.args.get('target', '').strip()
-    target_norm = normalize_to_scan_root(clean_target(target)) if target else ""
+    target_norm = normalize_target_for_scan(target) if target else ""
     user_id = session.get('user_id')
 
     # If a specific report_id is provided, always load that exact report (avoids "latest report wins").
@@ -1181,9 +1333,19 @@ def _rv_count_subdomain_lines(text_value: str) -> int:
 
 
 def _rv_count_live_web_from_web_report(web_text: str) -> int:
-    # web.txt includes headers + other sections; count URL lines in LIVE WEB SERVICES block.
+    # web.txt includes multiple sections; only count live service lines inside LIVE WEB SERVICES.
     lines = _rv_clean_nonempty_lines(web_text)
-    return sum(1 for s in lines if s.startswith("http://") or s.startswith("https://"))
+    in_live_block = False
+    count = 0
+    for s in lines:
+        if s.strip().lower() == "--- live web services ---":
+            in_live_block = True
+            continue
+        if in_live_block and s.startswith("---"):
+            break
+        if in_live_block and (s.startswith("http://") or s.startswith("https://")):
+            count += 1
+    return count
 
 
 def _rv_parse_owasp_top25_param_distribution(parameters_text: str) -> dict:
@@ -1227,6 +1389,58 @@ def _rv_parse_owasp_top25_param_distribution(parameters_text: str) -> dict:
     return counts
 
 
+def _rv_parse_owasp_top10_distribution(vulnerabilities_text: str) -> dict:
+    if not vulnerabilities_text or not isinstance(vulnerabilities_text, str):
+        return {}
+
+    counts = {}
+    for raw in vulnerabilities_text.splitlines():
+        line = (raw or "").strip()
+        if not line:
+            continue
+        m = re.search(r"\[OWASP:(A\d{2}):2021\]", line)
+        if not m:
+            continue
+        code = m.group(1)
+        counts[code] = counts.get(code, 0) + 1
+    return counts
+
+
+def _rv_extract_owasp_top10_findings(vulnerabilities_text: str) -> list:
+    if not vulnerabilities_text or not isinstance(vulnerabilities_text, str):
+        return []
+
+    comments_map = {
+        "A01": "Broken Access Control",
+        "A02": "Cryptographic Failures",
+        "A03": "Injection",
+        "A04": "Insecure Design",
+        "A05": "Security Misconfiguration",
+        "A06": "Vulnerable and Outdated Components",
+        "A07": "Identification and Authentication Failures",
+        "A08": "Software and Data Integrity Failures",
+        "A09": "Security Logging and Monitoring Failures",
+        "A10": "Server-Side Request Forgery",
+    }
+
+    findings = []
+    for raw in vulnerabilities_text.splitlines():
+        line = (raw or "").strip()
+        if not line or "[OWASP:" not in line:
+            continue
+        m = re.search(r"\[OWASP:(A\d{2}):2021\]\s*(.*)", line)
+        if not m:
+            continue
+        code = m.group(1)
+        detail = m.group(2).strip() or "OWASP-mapped finding detected."
+        findings.append({
+            "code": code,
+            "title": comments_map.get(code, "OWASP Risk"),
+            "detail": detail,
+        })
+    return findings
+
+
 @app.route('/visualize')
 @login_required
 def visualize_report():
@@ -1261,6 +1475,7 @@ def visualize_report():
     sub_live_text = (report_data.get("subdomains_live") or "").strip()
     web_text = (report_data.get("web") or "").strip()
     params_text = (report_data.get("parameters") or "").strip()
+    vuln_text = (report_data.get("vulnerabilities") or "").strip()
 
     live_dns_count = _rv_count_subdomain_lines(sub_all_text)
     if sub_live_text:
@@ -1279,11 +1494,20 @@ def visualize_report():
         top_labels.append("other")
         top_values.append(other_sum)
 
+    owasp_dist = _rv_parse_owasp_top10_distribution(vuln_text)
+    owasp_labels = list(owasp_dist.keys())
+    owasp_values = [owasp_dist[k] for k in owasp_labels]
+    owasp_findings = _rv_extract_owasp_top10_findings(vuln_text)
+
     chart_data = {
         "live_dns": live_dns_count,
         "live_web": live_web_count,
         "param_labels": top_labels,
-        "param_values": top_values
+        "param_values": top_values,
+        "owasp_labels": owasp_labels,
+        "owasp_values": owasp_values,
+        "owasp_category_count": len(owasp_labels),
+        "owasp_finding_count": len(owasp_findings),
     }
 
     return render_template(
@@ -1293,7 +1517,8 @@ def visualize_report():
         mode=mode,
         date=scan_date.strftime('%Y-%m-%d %H:%M') if scan_date else "N/A",
         report=report_data,
-        chart_data=chart_data
+        chart_data=chart_data,
+        owasp_findings=owasp_findings
     )
 
 
@@ -1327,10 +1552,13 @@ def stream_recon():
     app_instance = current_app._get_current_object()
 
     raw_target = request.args.get('target')
-    target = normalize_to_scan_root(clean_target(raw_target))   # force root domain
+    target = normalize_target_for_scan(raw_target)   # force root domain (domains only; IPs preserved)
     mode = request.args.get('mode')
     raw_modules = request.args.get('modules', '')
-    dict_file   = request.args.get('dict_file', 'dns_list.txt')  
+    dict_file   = request.args.get('dict_file', 'dns_list.txt')
+    subdomain_mode = request.args.get('subdomain_mode', 'active').strip().lower()
+    if subdomain_mode not in ('active', 'passive'):
+        subdomain_mode = 'active'
 
 
     # Sanitise — only allow filename, no path traversal
@@ -1338,7 +1566,7 @@ def stream_recon():
     if not dict_file.endswith('.txt'):
         dict_file = 'dns_list.txt'
 
-    print(f"[DEBUG] UI Selected: {dict_file}") 
+    print(f"[DEBUG] UI Selected: {dict_file} | subdomain_mode={subdomain_mode}") 
 
     
     user_id = session['user_id']
@@ -1364,11 +1592,12 @@ def stream_recon():
             httpx_timeout = 60
             nuclei_timeout = 90
 
-        modules_arg = ",".join(raw_modules) if isinstance(raw_modules, list) else raw_modules
+        modules_arg = normalize_selected_modules(raw_modules)
 
         yield f"data: {json.dumps({'log': f'[SYSTEM] Engine Engaged for {target}', 'progress': 5})}\n\n"
         yield f"data: {json.dumps({'log': f'[CONFIG] Applying UI Timeout: {scan_limit}s', 'progress': 7})}\n\n"
         yield f"data: {json.dumps({'log': f'[CONFIG] Tool Timeouts -> subfinder:{subfinder_timeout}s amass:{amass_timeout}s gobuster:{gobuster_timeout}s httpx:{httpx_timeout}s nuclei:{nuclei_timeout}s', 'progress': 8})}\n\n"
+        yield f"data: {json.dumps({'log': f'[CONFIG] Subdomain Recon Mode -> {subdomain_mode.upper()}', 'progress': 8})}\n\n"
 
         # --- B. COMMAND EXECUTION (WSL) ---
         cmd = (
@@ -1377,7 +1606,9 @@ def stream_recon():
             f"AMASS_TIMEOUT={amass_timeout} "
             f"GOBUSTER_TIMEOUT={gobuster_timeout} "
             f"HTTPX_TIMEOUT={httpx_timeout} "
-            f"NUCLEI_TIMEOUT={nuclei_timeout} && "
+            f"NUCLEI_TIMEOUT={nuclei_timeout} "
+            f"SUBDOMAIN_MODE={subdomain_mode} "
+            f"SUBDOMAIN_RECON_MODE={subdomain_mode} && "
             f"stdbuf -oL -eL "
             f"./reconvault.sh {target} {mode} '{modules_arg}' "
             f"{unique_folder} {scan_limit} '{dict_file}'"
@@ -1803,19 +2034,82 @@ def generate_pro_report():
             subdomain_rows = [report_target]
 
         owasp_codes = sorted(set(re.findall(r"\[OWASP:(A\d{2}):2021\]", vuln_text)))
-        owasp_comments_map = {
-            "A01": "Broken Access Control: enforce server-side authorization and least privilege.",
-            "A02": "Cryptographic Failures: enforce modern TLS and certificate hygiene.",
-            "A03": "Injection: use parameterized queries, validation and output encoding.",
-            "A04": "Insecure Design: add threat modeling and secure design controls.",
-            "A05": "Security Misconfiguration: harden defaults and disable exposed debug paths.",
-            "A06": "Vulnerable Components: patch and govern dependencies by CVE tracking.",
-            "A07": "Identification/Authentication Failures: strengthen auth and session controls.",
-            "A08": "Software/Data Integrity Failures: secure CI/CD and artifact integrity.",
-            "A09": "Logging/Monitoring Failures: improve telemetry and incident response readiness.",
-            "A10": "SSRF: restrict outbound access and validate target URLs."
+        owasp_detail_map = {
+            "A01": {
+                "title": "Broken Access Control",
+                "comment": "Authorization control weaknesses may allow users to access objects or actions outside their intended privileges.",
+                "impact": "Exposure of restricted functions, sensitive data, or unauthorized business actions.",
+                "recommendation": "Enforce server-side authorization on every sensitive request and validate object ownership consistently."
+            },
+            "A02": {
+                "title": "Cryptographic Failures",
+                "comment": "Weak transport or cryptographic controls increase the risk of data exposure and session compromise.",
+                "impact": "Interception of traffic, weak trust posture, and degraded confidentiality for user data.",
+                "recommendation": "Enforce modern TLS, deploy HSTS, and review cookie and certificate security posture."
+            },
+            "A03": {
+                "title": "Injection",
+                "comment": "Input handling weaknesses may permit attacker-controlled data to alter application behavior in unsafe ways.",
+                "impact": "Potential client-side script execution, unsafe query handling, or command abuse paths.",
+                "recommendation": "Use strict validation, context-aware output encoding, and parameterized server-side processing."
+            },
+            "A04": {
+                "title": "Insecure Design",
+                "comment": "Design-level weaknesses indicate missing security controls in system flows or business logic.",
+                "impact": "Persistent structural weaknesses that are not fully resolved by patching individual findings.",
+                "recommendation": "Perform threat modeling and add preventive controls during architecture and feature design."
+            },
+            "A05": {
+                "title": "Security Misconfiguration",
+                "comment": "The application exposes missing headers, weak defaults, or unnecessary metadata that weaken defensive posture.",
+                "impact": "Increased exploitability, information leakage, and easier chaining of lower-level weaknesses.",
+                "recommendation": "Apply hardened baseline configuration for headers, cross-origin policy, and deployment settings."
+            },
+            "A06": {
+                "title": "Vulnerable and Outdated Components",
+                "comment": "Unpatched dependencies or known-vulnerable components can expose the stack to publicly documented attack paths.",
+                "impact": "Component compromise through known CVEs or unsupported library behavior.",
+                "recommendation": "Maintain dependency inventory, patch routinely, and govern component versions centrally."
+            },
+            "A07": {
+                "title": "Identification and Authentication Failures",
+                "comment": "Authentication weaknesses reduce confidence in identity validation and session integrity.",
+                "impact": "Account takeover risk, weaker session protection, or reduced assurance for privileged access.",
+                "recommendation": "Strengthen authentication controls, secure session handling, and apply least-privileged access flows."
+            },
+            "A08": {
+                "title": "Software and Data Integrity Failures",
+                "comment": "Missing integrity validation increases trust in externally loaded or deployment-controlled resources.",
+                "impact": "Tampered scripts or unsafe software supply chain dependencies could affect application behavior.",
+                "recommendation": "Implement integrity controls such as SRI and secure software supply chain validation."
+            },
+            "A09": {
+                "title": "Security Logging and Monitoring Failures",
+                "comment": "Insufficient telemetry and monitoring reduce the ability to detect and respond to attacks in a timely manner.",
+                "impact": "Delayed incident response and reduced forensic visibility during a compromise.",
+                "recommendation": "Improve security logging coverage, alerting, retention, and response workflows."
+            },
+            "A10": {
+                "title": "Server-Side Request Forgery",
+                "comment": "Server-side request handling can be abused if outbound destinations are not strongly controlled.",
+                "impact": "Internal network exposure, cloud metadata access, or pivoting to trusted systems.",
+                "recommendation": "Restrict outbound requests, allowlist destinations, and validate all user-controlled URLs."
+            }
         }
-        owasp_items = [{"code": c, "comment": owasp_comments_map.get(c, "General OWASP risk detected.")} for c in owasp_codes]
+        owasp_evidence = _rv_extract_owasp_top10_findings(vuln_text)
+        owasp_items = []
+        for c in owasp_codes:
+            detail = owasp_detail_map.get(c, {})
+            evidence_for_code = [item for item in owasp_evidence if item.get("code") == c]
+            owasp_items.append({
+                "code": c,
+                "title": detail.get("title", "OWASP Finding"),
+                "comment": detail.get("comment", "General OWASP risk detected."),
+                "impact": detail.get("impact", "Security impact requires manual validation."),
+                "recommendation": detail.get("recommendation", "Review and remediate according to secure development best practices."),
+                "evidence_count": len(evidence_for_code),
+                "evidence_preview": evidence_for_code[:3]
+            })
 
         methodology_steps = [
             "Asset discovery and target expansion.",
@@ -1847,6 +2141,63 @@ def generate_pro_report():
         if not remediation_plan:
             remediation_plan.append("No explicit OWASP-mapped findings; continue periodic reassessment.")
 
+        detailed_recommendations = []
+        if "A05" in owasp_codes:
+            detailed_recommendations.extend([
+                {
+                    "priority": "High",
+                    "title": "Deploy missing security headers",
+                    "detail": "Add Content-Security-Policy, X-Content-Type-Options, Referrer-Policy, and modern cross-origin isolation headers where applicable."
+                },
+                {
+                    "priority": "High",
+                    "title": "Review cross-origin behavior",
+                    "detail": "Tighten CORS and browser policy configuration so only intended origins and features are exposed."
+                }
+            ])
+        if "A02" in owasp_codes:
+            detailed_recommendations.append({
+                "priority": "High",
+                "title": "Strengthen transport security",
+                "detail": "Enable HSTS, confirm TLS hardening, and ensure cookies use Secure and HttpOnly where sensitive sessions exist."
+            })
+        if "A03" in owasp_codes:
+            detailed_recommendations.append({
+                "priority": "High",
+                "title": "Reduce injection exposure",
+                "detail": "Apply strict input validation, safe server-side handling, and browser-side output encoding for untrusted content."
+            })
+        if "A06" in owasp_codes:
+            detailed_recommendations.append({
+                "priority": "Medium",
+                "title": "Govern components and libraries",
+                "detail": "Track component versions, patch routinely, and review dependency alerts as part of release management."
+            })
+        if "A07" in owasp_codes:
+            detailed_recommendations.append({
+                "priority": "Medium",
+                "title": "Reinforce authentication controls",
+                "detail": "Review session lifecycle, privileged flows, and identity assurance requirements for sensitive functions."
+            })
+        if "A08" in owasp_codes:
+            detailed_recommendations.append({
+                "priority": "Medium",
+                "title": "Improve software integrity controls",
+                "detail": "Use integrity attributes and supply-chain verification for external or third-party loaded resources."
+            })
+        if "A10" in owasp_codes:
+            detailed_recommendations.append({
+                "priority": "High",
+                "title": "Restrict outbound request paths",
+                "detail": "Introduce allowlists and network egress controls for any server-side URL fetching capability."
+            })
+        if not detailed_recommendations:
+            detailed_recommendations.append({
+                "priority": "Advisory",
+                "title": "Maintain continuous reassessment",
+                "detail": "No explicit OWASP Top 10 mapping was captured in this dataset; continue periodic validation and secure configuration review."
+            })
+
         tools_used = []
         raw_all = "\n".join([vuln_text, web_text, hosts_text, osint_text, params_text]).lower()
         for t in ["nuclei", "sqlmap", "dalfox", "tinja", "testssl", "commix", "nomore403", "subzy", "httpx", "gowitness"]:
@@ -1857,7 +2208,7 @@ def generate_pro_report():
 
         appendix = {
             "scan_date": str(scan_date),
-            "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "generated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "tools_used": tools_used
         }
 
@@ -1931,6 +2282,42 @@ def generate_pro_report():
             f"{severity_counts['critical']} critical, {severity_counts['high']} high, "
             f"{severity_counts['medium']} medium, and {severity_counts['low']} low findings."
         )
+        assessment_objective = (
+            f"This assessment was performed to identify externally observable attack surface, validate exposed services, "
+            f"and map captured security evidence to OWASP Top 10 2021 risk categories for {report_target}."
+        )
+        scope_statement = (
+            f"The testing scope covered the primary target {report_target} and associated in-scope discovered assets recorded by ReconVault at the time of the scan."
+        )
+        testing_constraints = [
+            "This report is based on automated and semi-automated reconnaissance evidence captured during the recorded scan window.",
+            "Results should be validated in context before production remediation or risk acceptance decisions are finalized.",
+            "Absence of a finding does not guarantee absence of risk; only observable evidence within configured modules is represented."
+        ]
+        conclusion_summary = (
+            f"The target currently presents a {risk_rating.lower()} risk posture based on the captured dataset. "
+            f"Primary attention should focus on the highlighted OWASP Top 10 categories and the prioritized remediation actions in this report."
+        )
+        owasp_category_count = len(owasp_items)
+        owasp_finding_total = len(owasp_evidence)
+        total_severity_findings = sum(severity_counts.values())
+        subdomain_methodology = (
+            "Subdomain discovery combined passive collection with active expansion and brute-force style enumeration through the ReconVault asset discovery workflow."
+            if subdomains_text and "No data" not in subdomains_text
+            else "No confirmed subdomain enumeration evidence was preserved in the stored report output."
+        )
+        service_assessment_methodology = (
+            "Live service validation and fingerprinting were performed against discovered web assets and host infrastructure to identify exposed entry points."
+        )
+        vuln_assessment_methodology = (
+            "Automated vulnerability evidence was correlated with severity indicators and OWASP Top 10 2021 mappings for prioritization."
+        )
+        key_metrics = {
+            "owasp_categories": owasp_category_count,
+            "owasp_evidence": owasp_finding_total,
+            "total_findings": total_severity_findings,
+            "modules_executed": len(modules_used)
+        }
 
         # Optional logo (base64 data URI for PDF template)
         logo_data_uri = ""
@@ -1945,7 +2332,7 @@ def generate_pro_report():
         export_dir = os.path.join(app.root_path, "exports")
         os.makedirs(export_dir, exist_ok=True)
         safe_target = re.sub(r'[^a-zA-Z0-9._-]', '_', report_target.strip())
-        date_str = datetime.now().strftime("%Y%m%d")
+        date_str = datetime.datetime.now().strftime("%Y%m%d")
         base_name = f"ReconVault_{safe_target}_penetrationTestingReport_{report_id}_{date_str}"
 
 
@@ -1970,7 +2357,15 @@ def generate_pro_report():
 
 
             "exec_summary": exec_summary,
+            "assessment_objective": assessment_objective,
+            "scope_statement": scope_statement,
             "business_impact": business_impact,
+            "testing_constraints": testing_constraints,
+            "conclusion_summary": conclusion_summary,
+            "key_metrics": key_metrics,
+            "subdomain_methodology": subdomain_methodology,
+            "service_assessment_methodology": service_assessment_methodology,
+            "vuln_assessment_methodology": vuln_assessment_methodology,
 
             "risk_score": risk_score,
             "risk_rating": risk_rating,
@@ -1985,7 +2380,9 @@ def generate_pro_report():
             "top_findings": top_findings,
 
             "owasp_items": owasp_items,
+            "owasp_evidence": owasp_evidence,
             "remediation_plan": remediation_plan,
+            "detailed_recommendations": detailed_recommendations,
 
             "subdomain_rows": subdomain_rows,
             "open_ports": open_ports,
@@ -2091,7 +2488,13 @@ def reports_page():
             asset_count = len([line for line in host_raw.strip().split('\n') if line.strip()]) if host_raw and isinstance(host_raw, str) else 0
 
             vuln_raw = data.get('vulnerabilities', "")
-            vuln_count = len([line for line in vuln_raw.strip().split('\n') if line.strip()]) if vuln_raw and isinstance(vuln_raw, str) else 0
+            if vuln_raw and isinstance(vuln_raw, str):
+                vuln_count = len([
+                    line for line in vuln_raw.strip().split('\n')
+                    if line.strip() and '[OWASP' in line
+                ])
+            else:
+                vuln_count = 0
 
             # Location detection (no DB schema change):
             # Kali SSH reports typically include subdomains_all/subdomains_live from your SFTP file_map.

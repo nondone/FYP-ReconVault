@@ -15,9 +15,14 @@
     </div>
     
     {% if history and history|length > 0 %}
-    <button type="button" class="btn-report danger" onclick="openPurgeModal()">
-        <i class="fas fa-fire"></i> PURGE ALL DATA
-    </button>
+    <div class="d-flex gap-2 flex-wrap justify-content-end">
+        <button type="button" class="btn-report" id="bulk-delete-trigger" onclick="openBulkDeleteModal()" disabled>
+            <i class="fas fa-trash-can"></i> DELETE SELECTED
+        </button>
+        <button type="button" class="btn-report danger" onclick="openPurgeModal()">
+            <i class="fas fa-fire"></i> PURGE ALL DATA
+        </button>
+    </div>
     {% endif %}
 </div>
 
@@ -26,7 +31,14 @@
     <div class="col-12">
         {% if history and history|length > 0 %}
             {% for item in history %}
-            <div class="report-card d-flex justify-content-between align-items-center">
+            <div class="report-card d-flex justify-content-between align-items-center" data-report-card="{{ item.id }}">
+                <div class="report-select-wrap">
+                    <input type="checkbox"
+                           class="report-select-checkbox"
+                           value="{{ item.id }}"
+                           data-target="{{ item.target }}"
+                           onchange="handleReportSelectionChange()">
+                </div>
                 
                 <!-- Left: Domain Info -->
                 <div class="d-flex align-items-center" style="width: 30%; position: relative; z-index: 1;">
@@ -149,6 +161,39 @@
 <!-- Hidden form for single delete submission -->
 <form id="delete-single-form" method="POST" style="display:none;"></form>
 
+<div id="modal-delete-bulk" class="rv-modal-backdrop" onclick="if(event.target===this) closeBulkDeleteModal()">
+    <div class="rv-modal-box">
+        <div class="rv-modal-header">
+            <div class="rv-modal-icon">
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 4h12M5 4V2.5A.5.5 0 015.5 2h5a.5.5 0 01.5.5V4M6 7v4M10 7v4M3 4l1 9a1 1 0 001 1h6a1 1 0 001-1l1-9" stroke="#f85149" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div>
+                <div class="rv-modal-title">Delete selected reports</div>
+                <div class="rv-modal-tag">MULTI-SELECT ACTION</div>
+            </div>
+        </div>
+        <div class="rv-modal-body">
+            <p>You are about to delete <strong id="delete-bulk-count">0</strong> selected report(s).</p>
+            <div class="rv-modal-warn">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;margin-top:1px;">
+                    <path d="M8 1.5L1.5 13h13L8 1.5z" stroke="#f85149" stroke-width="1.3" stroke-linejoin="round"/>
+                    <path d="M8 6v3.5M8 11v.5" stroke="#f85149" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+                <span>This action cannot be undone.</span>
+            </div>
+            <div id="delete-bulk-list" class="rv-bulk-list"></div>
+        </div>
+        <div class="rv-modal-footer">
+            <button class="rv-btn-cancel" onclick="closeBulkDeleteModal()">Cancel</button>
+            <button class="rv-btn-confirm" id="confirm-delete-bulk-btn" onclick="submitDeleteBulk()">Delete selected</button>
+        </div>
+    </div>
+</div>
+
+<form id="delete-bulk-form" action="{{ url_for('delete_reports_bulk') }}" method="POST" style="display:none;"></form>
+
 <!-- ── Purge All Reports Modal ── -->
 <div id="modal-purge-all" class="rv-modal-backdrop" onclick="if(event.target===this) closePurgeModal()">
     <div class="rv-modal-box">
@@ -218,6 +263,64 @@
 
 {% block scripts %}
 <script>
+    function getSelectedReportCheckboxes() {
+        return Array.from(document.querySelectorAll('.report-select-checkbox:checked'));
+    }
+
+    function handleReportSelectionChange() {
+        const selected = getSelectedReportCheckboxes();
+        const trigger = document.getElementById('bulk-delete-trigger');
+        if (trigger) {
+            trigger.disabled = selected.length === 0;
+            trigger.classList.toggle('disabled', selected.length === 0);
+        }
+
+        document.querySelectorAll('[data-report-card]').forEach(card => {
+            const checkbox = card.querySelector('.report-select-checkbox');
+            if (!checkbox) return;
+            card.classList.toggle('selected', checkbox.checked);
+        });
+    }
+
+    function openBulkDeleteModal() {
+        const selected = getSelectedReportCheckboxes();
+        if (!selected.length) return;
+
+        document.getElementById('delete-bulk-count').textContent = String(selected.length);
+        document.getElementById('delete-bulk-list').innerHTML = selected
+            .map(cb => `<div class="rv-bulk-list-item">${cb.dataset.target}</div>`)
+            .join('');
+
+        const btn = document.getElementById('confirm-delete-bulk-btn');
+        btn.textContent = 'Delete selected';
+        btn.disabled = false;
+
+        const form = document.getElementById('delete-bulk-form');
+        form.innerHTML = '';
+        selected.forEach(cb => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'report_ids';
+            input.value = cb.value;
+            form.appendChild(input);
+        });
+
+        document.getElementById('modal-delete-bulk').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeBulkDeleteModal() {
+        document.getElementById('modal-delete-bulk').classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    function submitDeleteBulk() {
+        const btn = document.getElementById('confirm-delete-bulk-btn');
+        btn.textContent = '';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        btn.disabled = true;
+        document.getElementById('delete-bulk-form').submit();
+    }
     // ── Single Delete Modal ──
     function openDeleteModal(reportId, target) {
         document.getElementById('delete-single-target').textContent = target;
@@ -301,8 +404,10 @@ function submitPurgeAll() {
 
     // ── Close on Escape ──
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') { closeDeleteModal(); closePurgeModal(); }
+        if (e.key === 'Escape') { closeDeleteModal(); closeBulkDeleteModal(); closePurgeModal(); }
     });
+
+    document.addEventListener('DOMContentLoaded', handleReportSelectionChange);
 
 
         

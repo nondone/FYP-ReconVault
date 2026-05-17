@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+exports/
+*.pdf
+*.docx
+*.html
+
+.env
+venv/
+node_modules/
+
+*.exe

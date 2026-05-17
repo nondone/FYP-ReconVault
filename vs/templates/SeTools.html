@@ -9,10 +9,10 @@
     <p>Manual investigation tools powered by specialized APIs</p>
 </div>
 
-<div class="row g-4">
+<div class="row g-4 security-toolbox-row">
     <!-- Main Result Panel -->
     <div class="col-lg-8">
-        <div class="tool-card p-5">
+        <div class="tool-card security-toolbox-card p-5">
             <div class="tool-card-header">
                 <h5 class="text-info"><i class="fas fa-microscope"></i>Analysis Result</h5>
                 {% if result and result.target %}
@@ -30,6 +30,36 @@
             {% elif result %}
                 <!-- Headers Analysis -->
                 {% if result.type == 'headers' %}
+                    {% set ns = namespace(protected=0, missing=0) %}
+                    {% for header, status in result.data.items() %}
+                        {% if status == 'PROTECTED' %}
+                            {% set ns.protected = ns.protected + 1 %}
+                        {% else %}
+                            {% set ns.missing = ns.missing + 1 %}
+                        {% endif %}
+                    {% endfor %}
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="stat-card text-center">
+                                <h3 class="text-info">{{ result.data.values() | list | count }}</h3>
+                                <small class="text-uppercase text-secondary">Headers Checked</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stat-card text-center">
+                                <h3 class="text-success">{{ ns.protected }}</h3>
+                                <small class="text-uppercase text-secondary">Protected</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stat-card text-center">
+                                <h3 class="text-danger">{{ ns.missing }}</h3>
+                                <small class="text-uppercase text-secondary">Missing</small>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="table-responsive">
                         <table class="table table-tools">
                             <thead>
@@ -58,7 +88,69 @@
                     <!-- Summary -->
                     <div class="info-box mt-4">
                         <i class="fas fa-info-circle"></i>
-                        <strong>{{ result.data.values() | list | count }}</strong> security headers analyzed
+                        <strong>{{ result.data.values() | list | count }}</strong> security headers analyzed.
+                        {% if ns.missing == 0 %}
+                            All recommended headers were detected.
+                        {% else %}
+                            <strong>{{ ns.missing }}</strong> missing header{{ '' if ns.missing == 1 else 's' }} should be remediated.
+                        {% endif %}
+                    </div>
+
+                    <div class="tool-card security-toolbox-card mt-4" style="padding: 22px; background: linear-gradient(180deg, rgba(88,166,255,0.06), rgba(13,17,23,0.4)); border: 1px solid rgba(88,166,255,0.12);">
+                        <div class="tool-card-header" style="margin-bottom: 18px;">
+                            <h5 class="text-warning" style="margin:0;">
+                                <i class="fas fa-screwdriver-wrench"></i>Remediation Recommendations
+                            </h5>
+                        </div>
+
+                        <div class="d-grid gap-3">
+                            {% if result.data.get('Content-Security-Policy') == 'MISSING' %}
+                            <div style="padding: 14px 16px; border-radius: 10px; background: rgba(248,81,73,0.08); border: 1px solid rgba(248,81,73,0.18);">
+                                <div style="font-weight: 700; color: #ff7b72; margin-bottom: 6px;">Top Priority: Add Content-Security-Policy</div>
+                                <div style="color: #c9d1d9; font-size: 0.9rem; margin-bottom: 8px;">Reduces XSS and unauthorized script execution by restricting trusted content sources.</div>
+                                <code style="display:block; white-space:pre-wrap; color:#58a6ff; background:rgba(88,166,255,0.08); padding:8px 10px; border-radius:6px;">Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'self';</code>
+                            </div>
+                            {% endif %}
+
+                            {% if result.data.get('Strict-Transport-Security') == 'MISSING' %}
+                            <div style="padding: 14px 16px; border-radius: 10px; background: rgba(248,81,73,0.08); border: 1px solid rgba(248,81,73,0.18);">
+                                <div style="font-weight: 700; color: #ff7b72; margin-bottom: 6px;">Top Priority: Enforce HTTPS with HSTS</div>
+                                <div style="color: #c9d1d9; font-size: 0.9rem; margin-bottom: 8px;">Prevents protocol downgrade and cookie/session exposure over insecure HTTP.</div>
+                                <code style="display:block; white-space:pre-wrap; color:#58a6ff; background:rgba(88,166,255,0.08); padding:8px 10px; border-radius:6px;">Strict-Transport-Security: max-age=31536000; includeSubDomains; preload</code>
+                            </div>
+                            {% endif %}
+
+                            {% if result.data.get('X-Content-Type-Options') == 'MISSING' %}
+                            <div style="padding: 14px 16px; border-radius: 10px; background: rgba(255,166,0,0.08); border: 1px solid rgba(255,166,0,0.18);">
+                                <div style="font-weight: 700; color: #f2cc60; margin-bottom: 6px;">Medium Priority: Add X-Content-Type-Options</div>
+                                <div style="color: #c9d1d9; font-size: 0.9rem; margin-bottom: 8px;">Stops browsers from MIME-sniffing unexpected content types.</div>
+                                <code style="display:block; white-space:pre-wrap; color:#58a6ff; background:rgba(88,166,255,0.08); padding:8px 10px; border-radius:6px;">X-Content-Type-Options: nosniff</code>
+                            </div>
+                            {% endif %}
+
+                            {% if result.data.get('Referrer-Policy') == 'MISSING' %}
+                            <div style="padding: 14px 16px; border-radius: 10px; background: rgba(255,166,0,0.08); border: 1px solid rgba(255,166,0,0.18);">
+                                <div style="font-weight: 700; color: #f2cc60; margin-bottom: 6px;">Medium Priority: Add Referrer-Policy</div>
+                                <div style="color: #c9d1d9; font-size: 0.9rem; margin-bottom: 8px;">Limits leakage of internal paths and query strings to third-party sites.</div>
+                                <code style="display:block; white-space:pre-wrap; color:#58a6ff; background:rgba(88,166,255,0.08); padding:8px 10px; border-radius:6px;">Referrer-Policy: strict-origin-when-cross-origin</code>
+                            </div>
+                            {% endif %}
+
+                            {% if result.data.get('Permissions-Policy') == 'MISSING' %}
+                            <div style="padding: 14px 16px; border-radius: 10px; background: rgba(255,166,0,0.08); border: 1px solid rgba(255,166,0,0.18);">
+                                <div style="font-weight: 700; color: #f2cc60; margin-bottom: 6px;">Medium Priority: Restrict Browser Features</div>
+                                <div style="color: #c9d1d9; font-size: 0.9rem; margin-bottom: 8px;">Disables sensitive browser capabilities such as camera, microphone, and payment APIs where not needed.</div>
+                                <code style="display:block; white-space:pre-wrap; color:#58a6ff; background:rgba(88,166,255,0.08); padding:8px 10px; border-radius:6px;">Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=()</code>
+                            </div>
+                            {% endif %}
+
+                            {% if result.data.get('X-Frame-Options') == 'PROTECTED' %}
+                            <div style="padding: 14px 16px; border-radius: 10px; background: rgba(63,185,80,0.08); border: 1px solid rgba(63,185,80,0.18);">
+                                <div style="font-weight: 700; color: #3fb950; margin-bottom: 6px;">Positive Control: Clickjacking protection is present</div>
+                                <div style="color: #c9d1d9; font-size: 0.9rem;">Keep <code style="color:#58a6ff;">X-Frame-Options</code> enabled and consider also enforcing <code style="color:#58a6ff;">frame-ancestors</code> in CSP for modern browsers.</div>
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
 
                 <!-- VirusTotal Analysis -->
@@ -134,7 +226,7 @@
 
     <!-- Control Panel -->
     <div class="col-lg-4">
-        <div class="tool-card p-5">
+        <div class="tool-card security-toolbox-card p-5">
             <h5 class="text-secondary mb-4 fw-bold text-uppercase" style="font-size: 0.95rem;">
                 <i class="fas fa-sliders-h me-2 text-info"></i>Analysis Configuration
             </h5>
@@ -207,6 +299,9 @@
                     {% endif %}
                 </div>
             </div>
+        </div>
+    </div>
+</div>
 
 
 {% endblock %}

@@ -49,9 +49,9 @@
 
     <div class="sidebar d-flex flex-column" id="app-sidebar">
         <div class="brand-header py-4 px-4 d-flex align-items-center justify-content-between">
-            <h4 class="text-white d-flex align-items-center m-0 fw-bold">
+            <h4 class="text-white d-flex align-items-center m-0 fw-bold sidebar-brand-title">
                 <i class="fas fa-microchip text-info me-2"></i>
-                <span style="letter-spacing: -0.5px;">RECON<span class="text-info">VAULT</span></span>
+                <span class="sidebar-brand-wordmark" style="letter-spacing: -0.5px;">RECON<span class="text-info">VAULT</span></span>
             </h4>
 
             <button class="sidebar-close d-lg-none" type="button" onclick="closeSidebar()">
@@ -59,7 +59,7 @@
             </button>
         </div>
 
-        <nav class="nav flex-column mb-auto">
+        <nav class="nav flex-column mb-auto sidebar-nav">
             <a href="{{ url_for('index') }}" class="nav-link {{ 'active' if request.endpoint == 'index' }}">
                 <i class="fas fa-chart-pie"></i> Dashboard
             </a>
@@ -85,12 +85,12 @@
             </a>
         </nav>
 
-        <div class="user-info">
+        <div class="user-info sidebar-user-panel">
             <div class="d-flex align-items-center mb-2">
-                <div class="avatar me-2 bg-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                <div class="avatar me-2 bg-secondary rounded-circle d-flex align-items-center justify-content-center sidebar-user-avatar" style="width: 32px; height: 32px;">
                     <i class="fas fa-user-secret text-dark"></i>
                 </div>
-                <span class="text-white small fw-bold">{{ session['username'] if 'username' in session else 'Guest' }}</span>
+                <span class="text-white small fw-bold sidebar-user-name">{{ session['username'] if 'username' in session else 'Guest' }}</span>
             </div>
             <a href="{{ url_for('logout') }}" class="nav-link logout-link p-0">
                 <i class="fas fa-power-off"></i> Logout

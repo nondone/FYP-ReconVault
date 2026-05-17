@@ -90,7 +90,22 @@
                     <i class="fas fa-globe me-2" style="color: #3fb950;"></i>Web services
                 </div>
                 <div class="fw-semibold m-0" style="font-size: 1.8rem; color: #3fb950; line-height: 1;">
-                    {{ report.web.split('\n')|length if report and report.web != "..." else '0' }}
+                    {% if report and report.web and report.web != "..." %}
+                        {% set ns = namespace(in_live=false, count=0) %}
+                        {% for raw_line in report.web.split('\n') %}
+                            {% set line = raw_line.strip() %}
+                            {% if '--- LIVE WEB SERVICES ---' in line %}
+                                {% set ns.in_live = true %}
+                            {% elif ns.in_live and line.startswith('--- ') %}
+                                {% set ns.in_live = false %}
+                            {% elif ns.in_live and line.startswith('http') %}
+                                {% set ns.count = ns.count + 1 %}
+                            {% endif %}
+                        {% endfor %}
+                        {{ ns.count }}
+                    {% else %}
+                        0
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -109,7 +124,7 @@
     <div class="row g-4">
     <div class="col-lg-4">
 
-    <div id="rv-scan-config-panel" class="mb-3 rounded-3 overflow-hidden" style="border: 1px solid rgba(255,255,255,0.07); background: rgba(13,17,23,0.6);">
+    <div id="rv-scan-config-panel" class="mb-3 rounded-3 overflow-hidden rv-scan-pro-panel" style="border: 1px solid rgba(255,255,255,0.07); background: rgba(13,17,23,0.6);">
         <div class="px-3 py-2 d-flex justify-content-between align-items-center"
             style="background: rgba(22,27,34,0.6); border-bottom: 1px solid rgba(255,255,255,0.06);">
             <div class="banner-help-wrap">
@@ -123,22 +138,62 @@
             </div>
         </div>
 
-        <div class="p-4">
+        <div class="p-4 rv-scan-pro-body">
             <form id="reconForm">
-                <input type="text" name="target" id="targetInput"
-                    class="form-control mb-3"
-                    placeholder="domain.com"
-                    value="{{ target if target else '' }}" required
-                    style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #e6edf3; font-size: 14px; font-family: monospace; border-radius: 8px; padding: 12px 14px;">
+                <div class="rv-scan-brief mb-3">
+                    <div class="rv-scan-brief-chip">
+                        <i class="fas fa-crosshairs"></i>
+                        Enter target
+                    </div>
+                    <div class="rv-scan-brief-chip">
+                        <i class="fas fa-gauge-high"></i>
+                        Choose mode
+                    </div>
+                    <div class="rv-scan-brief-chip">
+                        <i class="fas fa-rocket"></i>
+                        Launch engine
+                    </div>
+                </div>
 
-                <div class="btn-group w-100 mb-3">
+                <div class="rv-scan-field-shell mb-3">
+                    <div class="rv-scan-field-label">
+                        <span>Primary Target</span>
+                        <span class="rv-scan-field-hint">Domain, URL, localhost, or hosted app</span>
+                    </div>
+                    <div class="rv-scan-input-wrap">
+                        <div class="rv-scan-input-icon">
+                            <i class="fas fa-bullseye"></i>
+                        </div>
+                        <input type="text" name="target" id="targetInput"
+                            class="form-control rv-scan-target-input"
+                            placeholder="example.com or https://target.app"
+                            value="{{ target if target else '' }}" required
+                            style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #e6edf3; font-size: 14px; font-family: monospace; border-radius: 8px; padding: 12px 14px;">
+                    </div>
+                    <div class="rv-scan-field-meta">
+                        <span><i class="fas fa-link"></i> Full URL supported</span>
+                        <span><i class="fas fa-server"></i> Localhost and hosted apps supported</span>
+                    </div>
+                </div>
+
+                <div class="rv-scan-mode-shell mb-3">
+                    <div class="rv-scan-field-label">
+                        <span>Scan Mode</span>
+                        <span class="rv-scan-field-hint">Balance speed and depth before execution</span>
+                    </div>
+                <div class="btn-group w-100 rv-scan-mode-group">
                     <input type="radio" class="btn-check" name="scan_mode" id="fast" value="fast" checked>
-                    <label class="btn btn-sm" for="fast"
+                    <label class="btn btn-sm rv-scan-mode-btn rv-scan-mode-fast" for="fast"
                         style="border: 1px solid rgba(88,166,255,0.3); color: #58a6ff; font-size: 12px; font-weight: 500; padding: 10px 12px;">Fast scan</label>
 
                     <input type="radio" class="btn-check" name="scan_mode" id="full" value="full">
-                    <label class="btn btn-sm" for="full"
+                    <label class="btn btn-sm rv-scan-mode-btn rv-scan-mode-deep" for="full"
                         style="border: 1px solid rgba(248,81,73,0.3); color: #f85149; font-size: 12px; font-weight: 500; padding: 10px 12px;">Deep scan</label>
+                </div>
+                <div class="rv-scan-mode-notes">
+                    <div class="rv-scan-mode-note fast"><strong>Fast:</strong> quicker passive coverage for rapid triage.</div>
+                    <div class="rv-scan-mode-note deep"><strong>Deep:</strong> fuller module set for stronger testing depth.</div>
+                </div>
                 </div>
 
 
@@ -148,8 +203,8 @@
                 ADD this block right AFTER the Fast/Deep scan button group (after </div> of btn-group)
                 -->
 
-                <div id="kali-engine-toggle" class="d-none d-flex align-items-center justify-content-between mb-3 p-4 rounded-3"
-                    style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08);">
+                <div id="kali-engine-toggle" class="d-none d-flex align-items-center justify-content-between mb-3 p-2"
+                    style="background: transparent; border: none;">
                     <div style="min-width: 0;">
                         <div style="font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.7px; font-weight: 700;">
                             Kali Engine (SSH)
@@ -206,6 +261,32 @@
 
 
                     {% if mod[0] == 'subdomains' %}
+                    <div id="subdomain-mode-picker" class="ms-3 mb-3 mt-2"
+                        style="border-left: 2px solid rgba(210,153,34,0.28); padding-left: 12px; transition: all 0.3s ease;">
+                        <label style="font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; display:block; margin-bottom:7px; font-family: monospace;">
+                            <i class="fas fa-satellite-dish me-1" style="color:#d29922;"></i> Subdomain Recon Mode
+                        </label>
+                        <div class="rv-subdomain-mode-group">
+                            <label class="rv-subdomain-mode-option">
+                                <input type="radio" name="subdomain_mode" id="subdomain_mode_active" value="active" checked>
+                                <span>
+                                    <strong>Active</strong>
+                                    <small>Uses gobuster and the selected dictionary.</small>
+                                </span>
+                            </label>
+                            <label class="rv-subdomain-mode-option">
+                                <input type="radio" name="subdomain_mode" id="subdomain_mode_passive" value="passive">
+                                <span>
+                                    <strong>Passive</strong>
+                                    <small>Uses subfinder and amass passive collection.</small>
+                                </span>
+                            </label>
+                        </div>
+                        <div id="subdomain-mode-info" class="rv-subdomain-mode-info">
+                            Active recon uses the dictionary picker below.
+                        </div>
+                    </div>
+
                     <div id="dict-picker" class="ms-3 mb-3 mt-2"
                         style="border-left: 2px solid rgba(88,166,255,0.3); padding-left: 12px; transition: all 0.3s ease;">
                         <label style="font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; display:block; margin-bottom:5px; font-family: monospace;">
@@ -224,22 +305,30 @@
                             <option value="seclists_top20k.txt">seclists_top20k.txt (SecLists Top 20k)</option>
                             <option value="seclists_top110k.txt">seclists_top110k.txt (SecLists Top 110k) [HEAVY]</option>
                         </select>
+                        <div id="dict-info" style="margin-top: 8px; font-size: 11px; color: #8b949e; line-height: 1.55;">
+                            <i class="fas fa-info-circle text-primary me-1"></i> <b>Mode:</b> Standard discovery
+                        </div>
                     </div>
                     {% endif %}
                     {% endfor %}
                 </div>
 
-                <button type="submit" id="start-btn" class="btn w-100 fw-semibold mb-2"
+                <button type="submit" id="start-btn" class="btn w-100 fw-semibold mb-2 rv-scan-launch-btn"
                     style="background: rgba(88,166,255,0.15); color: #58a6ff; border: 1px solid rgba(88,166,255,0.3); font-size: 14px; padding: 10px;">
                     <i class="fas fa-play me-2"></i>Start engine
                 </button>
 
-                <button type="button" id="stop-btn" class="btn w-100 fw-semibold mb-2 d-none"
+                <button type="button" id="stop-btn" class="btn w-100 fw-semibold mb-2 d-none rv-scan-stop-btn"
                     onclick="stopScanning(window.currentScanMode || 'local')"
 
                     style="background: rgba(248,81,73,0.15); color: #f85149; border: 1px solid rgba(248,81,73,0.3); font-size: 14px; padding: 10px;">
                     <i class="fas fa-stop-circle me-2"></i>Stop engine
                 </button>
+
+                <div class="rv-scan-launch-footnote">
+                    <i class="fas fa-shield-check"></i>
+                    ReconVault keeps scan setup local until you explicitly start the engine.
+                </div>
             </form>
         </div>
     </div>
@@ -434,8 +523,9 @@
         </div>
 
 
-        <div id="rv-web-body" style="height: 380px;">
-            <pre class="p-3 m-0 h-100" style="font-family: monospace; font-size: 12px; color: #3fb950; white-space: pre-wrap; overflow-y: auto; line-height: 1.6; background: rgba(13,17,23,0.6);">{{ report.web if report else 'Awaiting service fingerprinting...' }}</pre>
+        <div id="rv-web-body" style="height: 380px; overflow-y: auto; background: rgba(13,17,23,0.6);">
+            <div id="rv-web-audit-render" class="rv-web-audit-render"></div>
+            <pre id="rv-web-audit-raw" class="d-none">{{ report.web if report else 'Awaiting service fingerprinting...' }}</pre>
         </div>
     </div>
 </div>
@@ -499,16 +589,68 @@
                     </button>
                 </div>
 
-                <div style="height: 220px; overflow-y: auto; background: rgba(13,17,23,0.6);">
+                <div class="rv-vuln-panel-body" style="height: 220px; overflow-y: auto; background: rgba(13,17,23,0.6);">
                     {% if report and report.vulnerabilities and report.vulnerabilities != "..." %}
-                        {% set ns = namespace(found=false) %}
+                        {% set ns = namespace(found=false, tool='Analysis', tone='generic') %}
                         {% for vuln in report.vulnerabilities.split('\n') %}
                             {% set line = vuln.strip() %}
-                            {% if line and '[OWASP' not in line and '[+] OWASP TOP 10 MAPPING' not in line %}
+                            {% if line and '[OWASP' not in line and '[+] OWASP TOP 10 MAPPING' not in line and not line.startswith('---') and not line.startswith('===') %}
                                 {% set ns.found = true %}
-                                <div class="px-3 py-2" style="border-bottom: 1px solid rgba(255,255,255,0.04); border-left: 2px solid rgba(248,81,73,0.5); background: rgba(248,81,73,0.04); font-family: monospace; font-size: 12px; color: #f85149;">
-                                    <i class="fas fa-exclamation-triangle me-2" style="opacity: 0.7;"></i>{{ line }}
-                                </div>
+                                {% if line.startswith('[+]') %}
+                                    {% if 'ZAP BASELINE' in line %}
+                                        {% set ns.tool = 'ZAP' %}{% set ns.tone = 'zap' %}
+                                    {% elif 'NUCLEI' in line %}
+                                        {% set ns.tool = 'Nuclei' %}{% set ns.tone = 'nuclei' %}
+                                    {% elif 'SQL INJECTION' in line or 'SQLMap' in line %}
+                                        {% set ns.tool = 'SQLMap' %}{% set ns.tone = 'sqlmap' %}
+                                    {% elif 'XSS (Dalfox)' in line %}
+                                        {% set ns.tool = 'Dalfox' %}{% set ns.tone = 'dalfox' %}
+                                    {% elif 'SSTI (TInjA)' in line %}
+                                        {% set ns.tool = 'TInjA' %}{% set ns.tone = 'tinja' %}
+                                    {% elif 'SSL/TLS REPORT' in line %}
+                                        {% set ns.tool = 'TestSSL' %}{% set ns.tone = 'testssl' %}
+                                    {% elif 'COMMAND INJECTION' in line or 'Commix' in line %}
+                                        {% set ns.tool = 'Commix' %}{% set ns.tone = 'commix' %}
+                                    {% elif '403 BYPASS' in line %}
+                                        {% set ns.tool = 'NoMore403' %}{% set ns.tone = 'nomore403' %}
+                                    {% elif 'SUBDOMAIN TAKEOVER' in line %}
+                                        {% set ns.tool = 'Subzy' %}{% set ns.tone = 'subzy' %}
+                                    {% else %}
+                                        {% set ns.tool = 'Analysis' %}{% set ns.tone = 'generic' %}
+                                    {% endif %}
+                                    <div class="rv-vuln-tool-head rv-vuln-tool-{{ ns.tone }}">
+                                        <span class="rv-vuln-chip rv-vuln-chip-{{ ns.tone }}">{{ ns.tool }}</span>
+                                        <span class="rv-vuln-tool-title">{{ line[3:].strip() }}</span>
+                                    </div>
+                                {% elif not line.startswith('VULNERABILITY REPORT:')
+                                        and not line.startswith('Mode:')
+                                        and not line.startswith('Target:')
+                                        and not line.startswith('Timeout:')
+                                        and line != '--- Findings (ZAP) ---'
+                                        and not line.startswith('SCAN SUMMARY')
+                                        and not line.startswith('Critical/High findings:')
+                                        and not line.startswith('Medium findings')
+                                        and not line.startswith('Live targets scanned')
+                                        and not line.startswith('Param targets found')
+                                        and not line.startswith('Start ') %}
+                                    <div class="rv-vuln-entry rv-vuln-entry-{{ ns.tone }}">
+                                        <div class="rv-vuln-entry-meta">
+                                            <span class="rv-vuln-chip rv-vuln-chip-{{ ns.tone }}">{{ ns.tool }}</span>
+                                            <span class="rv-vuln-chip rv-vuln-chip-subtle">
+                                                {% if 'WARN-NEW:' in line or 'FAIL-NEW:' in line or '[medium]' in line or '[high]' in line or '[critical]' in line or '[low]' in line or 'vulnerable' in line.lower() %}
+                                                    Finding
+                                                {% elif line.lower().startswith('no ') or 'timed out' in line.lower() or 'unreachable' in line.lower() or 'skipping' in line.lower() %}
+                                                    Status
+                                                {% else %}
+                                                    Summary
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                        <div class="rv-vuln-entry-text rv-vuln-entry-text-{{ ns.tone }}">
+                                            <i class="fas fa-exclamation-triangle me-2" style="opacity: 0.7;"></i>{{ line }}
+                                        </div>
+                                    </div>
+                                {% endif %}
                             {% endif %}
                         {% endfor %}
                         {% if not ns.found %}
@@ -539,15 +681,21 @@
                     </button>
                 </div>
 
-                <div style="height: 220px; overflow-y: auto; background: rgba(13,17,23,0.6);">
+                <div class="rv-vuln-panel-body" style="height: 220px; overflow-y: auto; background: rgba(13,17,23,0.6);">
                     {% if report and report.vulnerabilities and report.vulnerabilities != "..." %}
                         {% set ns = namespace(found=false) %}
                         {% for vuln in report.vulnerabilities.split('\n') %}
                             {% set line = vuln.strip() %}
                             {% if line and '[OWASP' in line %}
                                 {% set ns.found = true %}
-                                <div class="px-3 py-2" style="border-bottom: 1px solid rgba(255,255,255,0.04); border-left: 2px solid rgba(210,153,34,0.5); background: rgba(210,153,34,0.05); font-family: monospace; font-size: 12px; color: #d29922;">
-                                    <i class="fas fa-shield-alt me-2" style="opacity: 0.7;"></i>{{ line }}
+                                <div class="rv-owasp-entry">
+                                    <div class="rv-vuln-entry-meta">
+                                        <span class="rv-vuln-chip rv-vuln-chip-owasp">OWASP Top 10</span>
+                                        <span class="rv-vuln-chip rv-vuln-chip-subtle">Mapped Risk</span>
+                                    </div>
+                                    <div class="rv-vuln-entry-text rv-vuln-entry-text-owasp">
+                                        <i class="fas fa-shield-alt me-2" style="opacity: 0.7;"></i>{{ line }}
+                                    </div>
                                 </div>
                             {% endif %}
                         {% endfor %}
@@ -784,7 +932,7 @@
             <button class="rv-close-btn" onclick="closeModal('modal-web')"><i class="fas fa-times"></i></button>
         </div>
         <div class="rv-fullscreen-content" style="background: rgba(13,17,23,0.8);">
-            <pre class="p-4 m-0" style="font-family: monospace; font-size: 13px; color: #3fb950; white-space: pre-wrap; line-height: 1.7; min-height: 400px;">{{ report.web if report else 'Awaiting service fingerprinting...' }}</pre>
+            <div id="rv-web-audit-modal-render" class="rv-web-audit-render rv-web-audit-render-modal"></div>
         </div>
     </div>
 </div>
@@ -823,8 +971,14 @@
                     {% set line = vuln.strip() %}
                     {% if line and '[OWASP' in line %}
                         {% set ns.found = true %}
-                        <div class="px-4 py-3" style="border-bottom: 1px solid rgba(255,255,255,0.04); border-left: 3px solid rgba(210,153,34,0.5); background: rgba(210,153,34,0.05); font-family: monospace; font-size: 13px; color: #d29922;">
-                            <i class="fas fa-shield-alt me-2" style="opacity: 0.7;"></i>{{ line }}
+                        <div class="rv-owasp-entry rv-owasp-entry-modal">
+                            <div class="rv-vuln-entry-meta">
+                                <span class="rv-vuln-chip rv-vuln-chip-owasp">OWASP Top 10</span>
+                                <span class="rv-vuln-chip rv-vuln-chip-subtle">Mapped Risk</span>
+                            </div>
+                            <div class="rv-vuln-entry-text rv-vuln-entry-text-owasp">
+                                <i class="fas fa-shield-alt me-2" style="opacity: 0.7;"></i>{{ line }}
+                            </div>
                         </div>
                     {% endif %}
                 {% endfor %}
@@ -846,14 +1000,66 @@
         </div>
         <div class="rv-fullscreen-content" style="min-height: 400px;">
             {% if report and report.vulnerabilities and report.vulnerabilities != "..." %}
-                {% set ns = namespace(found=false) %}
+                {% set ns = namespace(found=false, tool='Analysis', tone='generic') %}
                 {% for vuln in report.vulnerabilities.split('\n') %}
                     {% set line = vuln.strip() %}
-                    {% if line and '[OWASP' not in line and '[+] OWASP TOP 10 MAPPING' not in line %}
+                    {% if line and '[OWASP' not in line and '[+] OWASP TOP 10 MAPPING' not in line and not line.startswith('---') and not line.startswith('===') %}
                         {% set ns.found = true %}
-                        <div class="px-4 py-3" style="border-bottom: 1px solid rgba(255,255,255,0.04); border-left: 3px solid rgba(248,81,73,0.5); background: rgba(248,81,73,0.04); font-family: monospace; font-size: 13px; color: #f85149;">
-                            <i class="fas fa-exclamation-triangle me-2" style="opacity: 0.7;"></i>{{ line }}
-                        </div>
+                        {% if line.startswith('[+]') %}
+                            {% if 'ZAP BASELINE' in line %}
+                                {% set ns.tool = 'ZAP' %}{% set ns.tone = 'zap' %}
+                            {% elif 'NUCLEI' in line %}
+                                {% set ns.tool = 'Nuclei' %}{% set ns.tone = 'nuclei' %}
+                            {% elif 'SQL INJECTION' in line or 'SQLMap' in line %}
+                                {% set ns.tool = 'SQLMap' %}{% set ns.tone = 'sqlmap' %}
+                            {% elif 'XSS (Dalfox)' in line %}
+                                {% set ns.tool = 'Dalfox' %}{% set ns.tone = 'dalfox' %}
+                            {% elif 'SSTI (TInjA)' in line %}
+                                {% set ns.tool = 'TInjA' %}{% set ns.tone = 'tinja' %}
+                            {% elif 'SSL/TLS REPORT' in line %}
+                                {% set ns.tool = 'TestSSL' %}{% set ns.tone = 'testssl' %}
+                            {% elif 'COMMAND INJECTION' in line or 'Commix' in line %}
+                                {% set ns.tool = 'Commix' %}{% set ns.tone = 'commix' %}
+                            {% elif '403 BYPASS' in line %}
+                                {% set ns.tool = 'NoMore403' %}{% set ns.tone = 'nomore403' %}
+                            {% elif 'SUBDOMAIN TAKEOVER' in line %}
+                                {% set ns.tool = 'Subzy' %}{% set ns.tone = 'subzy' %}
+                            {% else %}
+                                {% set ns.tool = 'Analysis' %}{% set ns.tone = 'generic' %}
+                            {% endif %}
+                            <div class="rv-vuln-tool-head rv-vuln-tool-head-modal rv-vuln-tool-{{ ns.tone }}">
+                                <span class="rv-vuln-chip rv-vuln-chip-{{ ns.tone }}">{{ ns.tool }}</span>
+                                <span class="rv-vuln-tool-title">{{ line[3:].strip() }}</span>
+                            </div>
+                        {% elif not line.startswith('VULNERABILITY REPORT:')
+                                and not line.startswith('Mode:')
+                                and not line.startswith('Target:')
+                                and not line.startswith('Timeout:')
+                                and line != '--- Findings (ZAP) ---'
+                                and not line.startswith('SCAN SUMMARY')
+                                and not line.startswith('Critical/High findings:')
+                                and not line.startswith('Medium findings')
+                                and not line.startswith('Live targets scanned')
+                                and not line.startswith('Param targets found')
+                                and not line.startswith('Start ') %}
+                            <div class="rv-vuln-entry rv-vuln-entry-modal rv-vuln-entry-{{ ns.tone }}">
+                                <div class="rv-vuln-entry-meta">
+                                    <span class="rv-vuln-chip rv-vuln-chip-{{ ns.tone }}">{{ ns.tool }}</span>
+                                    <span class="rv-vuln-chip rv-vuln-chip-subtle">
+                                        {% if 'WARN-NEW:' in line or 'FAIL-NEW:' in line or '[medium]' in line or '[high]' in line or '[critical]' in line or '[low]' in line or 'vulnerable' in line.lower() %}
+                                            Finding
+                                        {% elif line.lower().startswith('no ') or 'timed out' in line.lower() or 'unreachable' in line.lower() or 'skipping' in line.lower() %}
+                                            Status
+                                        {% else %}
+                                            Summary
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                <div class="rv-vuln-entry-text rv-vuln-entry-text-{{ ns.tone }}">
+                                    <i class="fas fa-exclamation-triangle me-2" style="opacity: 0.7;"></i>{{ line }}
+                                </div>
+                            </div>
+                        {% endif %}
                     {% endif %}
                 {% endfor %}
                 {% if not ns.found %}
@@ -934,6 +1140,20 @@
         <div class="mb-3" style="height: 3px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden;">
             <div id="widget-bar" style="height: 3px; background: #58a6ff; width: 0%; transition: width 0.5s ease; border-radius: 99px;"></div>
         </div>
+        <div class="rv-progress-details mb-3">
+            <div class="rv-progress-detail-card">
+                <span class="rv-progress-detail-label">Engine</span>
+                <span id="widget-engine" class="rv-progress-detail-value">Standby</span>
+            </div>
+            <div class="rv-progress-detail-card">
+                <span class="rv-progress-detail-label">Stage</span>
+                <span id="widget-stage" class="rv-progress-detail-value">Initializing</span>
+            </div>
+            <div class="rv-progress-detail-card rv-progress-detail-card-full">
+                <span class="rv-progress-detail-label">ZAP Status</span>
+                <span id="widget-zap-status" class="rv-progress-detail-value rv-zap-status rv-zap-status-waiting">Waiting for vulnerability stage</span>
+            </div>
+        </div>
         <div class="p-2 rounded-2 d-flex justify-content-between align-items-center" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05);">
             <span style="font-size: 11px; color: #484f58; font-family: monospace;">PID: <span id="widget-task-code">0x7F4...</span></span>
             <p class="mb-0" id="overlay-status" style="font-size: 11px; color: #58a6ff; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;">Initializing engine...</p>
@@ -956,6 +1176,264 @@
 
 
 <script>
+
+function escapeWebAuditHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function shortenWebAuditText(value, maxLength = 90) {
+    const text = String(value || '').trim();
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, Math.max(0, maxLength - 1))}…`;
+}
+
+function parseWebAuditReport(raw) {
+    const text = raw || '';
+    const lines = text.split('\n').map(line => line.replace(/\r/g, ''));
+    const sections = {};
+    let currentSection = 'intro';
+    sections[currentSection] = [];
+
+    for (const rawLine of lines) {
+        const line = rawLine.trimEnd();
+        const match = line.match(/^---\s+(.+?)\s+---$/);
+        if (match) {
+            currentSection = match[1].trim().toLowerCase();
+            sections[currentSection] = sections[currentSection] || [];
+            continue;
+        }
+        sections[currentSection] = sections[currentSection] || [];
+        sections[currentSection].push(line);
+    }
+
+    const liveServices = [];
+    for (const line of sections['live web services'] || []) {
+        const trimmed = line.trim();
+        const m = trimmed.match(/^(https?:\/\/\S+)\s+\[(\d{3})\]\s+\[(.*?)\]$/);
+        if (!m) continue;
+        const url = m[1];
+        const status = m[2];
+        const detail = (m[3] || '').trim() || '-';
+        const host = url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+        liveServices.push({ url, host, status, detail });
+    }
+
+    const statusSummary = [];
+    for (const line of sections['http status summary'] || []) {
+        const trimmed = line.trim();
+        const m = trimmed.match(/^(\d{3})\s*->\s*(\d+)\s+responses?$/i);
+        if (m) statusSummary.push({ status: m[1], count: m[2] });
+    }
+
+    const redirects = [];
+    for (const line of sections['redirect summary'] || []) {
+        const trimmed = line.trim();
+        const m = trimmed.match(/^(https?:\/\/\S+)\s+\[(\d{3})\]\s+\[(.*?)\]$/);
+        if (!m) continue;
+        redirects.push({
+            host: m[1].replace(/^https?:\/\//, '').replace(/\/.*$/, ''),
+            status: m[2],
+            target: (m[3] || '').trim() || '-'
+        });
+    }
+
+    const wafRows = [];
+    for (const line of sections['waf detection'] || []) {
+        const trimmed = line.trim();
+        const m = trimmed.match(/^\[.*?\]\s+(https?:\/\/\S+):\s+(.*)$/);
+        if (!m) continue;
+        wafRows.push({
+            host: m[1].replace(/^https?:\/\//, '').replace(/\/.*$/, ''),
+            value: m[2].trim()
+        });
+    }
+
+    const commonFiles = [];
+    for (const line of sections['common web files'] || []) {
+        const trimmed = line.trim();
+        const m = trimmed.match(/^(https?:\/\/[^\/]+)(\/\S+)\s+\[(\d{3})\]$/);
+        if (!m) continue;
+        commonFiles.push({
+            host: m[1].replace(/^https?:\/\//, ''),
+            path: m[2],
+            status: m[3]
+        });
+    }
+
+    const headerBlocks = [];
+    let currentHeaderBlock = null;
+    for (const line of sections['security headers snapshot'] || []) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const hostMatch = trimmed.match(/^\[URL\]\s+(https?:\/\/\S+)$/i) || trimmed.match(/^\[(.+?)\]$/);
+        if (hostMatch) {
+            if (currentHeaderBlock) headerBlocks.push(currentHeaderBlock);
+            const host = (hostMatch[1] || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+            currentHeaderBlock = { host, headers: [] };
+            continue;
+        }
+        if (currentHeaderBlock) currentHeaderBlock.headers.push(trimmed);
+    }
+    if (currentHeaderBlock) headerBlocks.push(currentHeaderBlock);
+
+    return { text, liveServices, statusSummary, redirects, wafRows, commonFiles, headerBlocks };
+}
+
+function buildWebAuditTable(headers, rows, options = {}) {
+    if (!rows.length) {
+        return `<div class="rv-web-empty">${escapeWebAuditHtml(options.emptyText || 'No entries captured.')}</div>`;
+    }
+    const head = headers.map(h => `<th>${escapeWebAuditHtml(h)}</th>`).join('');
+    const body = rows.map(row =>
+        `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`
+    ).join('');
+    return `
+        <div class="rv-web-table-wrap">
+            <table class="rv-web-table">
+                <thead><tr>${head}</tr></thead>
+                <tbody>${body}</tbody>
+            </table>
+        </div>
+    `;
+}
+
+function renderWebAuditUi() {
+    const rawNode = document.getElementById('rv-web-audit-raw');
+    const panel = document.getElementById('rv-web-audit-render');
+    const modal = document.getElementById('rv-web-audit-modal-render');
+    if (!rawNode || !panel || !modal) return;
+
+    const raw = rawNode.textContent || '';
+    if (!raw.trim() || /Awaiting service fingerprinting/i.test(raw)) {
+        const empty = '<div class="rv-web-empty-state"><i class="fas fa-globe"></i><span>Awaiting service fingerprinting...</span></div>';
+        panel.innerHTML = empty;
+        modal.innerHTML = empty;
+        return;
+    }
+
+    const parsed = parseWebAuditReport(raw);
+
+    const liveRows = parsed.liveServices.map(item => [
+        `<span class="rv-web-domain">${escapeWebAuditHtml(item.host)}</span>`,
+        `<span class="rv-web-status rv-web-status-${escapeWebAuditHtml(item.status)}">${escapeWebAuditHtml(item.status)}</span>`,
+        `<span class="rv-web-detail" title="${escapeWebAuditHtml(item.detail)}">${escapeWebAuditHtml(shortenWebAuditText(item.detail, 72))}</span>`
+    ]);
+    const summaryCards = `
+        <div class="rv-web-summary-grid">
+            <div class="rv-web-summary-card">
+                <span class="rv-web-summary-label">Live Targets</span>
+                <span class="rv-web-summary-value">${parsed.liveServices.length}</span>
+            </div>
+            <div class="rv-web-summary-card">
+                <span class="rv-web-summary-label">Redirects</span>
+                <span class="rv-web-summary-value">${parsed.redirects.length}</span>
+            </div>
+            <div class="rv-web-summary-card">
+                <span class="rv-web-summary-label">WAF Checks</span>
+                <span class="rv-web-summary-value">${parsed.wafRows.length}</span>
+            </div>
+            <div class="rv-web-summary-card">
+                <span class="rv-web-summary-label">Header Snapshots</span>
+                <span class="rv-web-summary-value">${parsed.headerBlocks.length}</span>
+            </div>
+        </div>
+    `;
+
+    const statusRows = parsed.statusSummary.map(item => [
+        `<span class="rv-web-status rv-web-status-${escapeWebAuditHtml(item.status)}">${escapeWebAuditHtml(item.status)}</span>`,
+        `<span class="rv-web-count">${escapeWebAuditHtml(item.count)}</span>`
+    ]);
+
+    const redirectRows = parsed.redirects.map(item => [
+        `<span class="rv-web-domain">${escapeWebAuditHtml(item.host)}</span>`,
+        `<span class="rv-web-status rv-web-status-${escapeWebAuditHtml(item.status)}">${escapeWebAuditHtml(item.status)}</span>`,
+        `<span class="rv-web-detail" title="${escapeWebAuditHtml(item.target)}">${escapeWebAuditHtml(shortenWebAuditText(item.target, 76))}</span>`
+    ]);
+
+    const wafRows = parsed.wafRows.map(item => [
+        `<span class="rv-web-domain">${escapeWebAuditHtml(item.host)}</span>`,
+        `<span class="rv-web-detail">${escapeWebAuditHtml(item.value)}</span>`
+    ]);
+
+    const commonFileRows = parsed.commonFiles.map(item => [
+        `<span class="rv-web-domain">${escapeWebAuditHtml(item.host)}</span>`,
+        `<span class="rv-web-path">${escapeWebAuditHtml(item.path)}</span>`,
+        `<span class="rv-web-status rv-web-status-${escapeWebAuditHtml(item.status)}">${escapeWebAuditHtml(item.status)}</span>`
+    ]);
+
+    const headerBlocks = parsed.headerBlocks.length
+        ? parsed.headerBlocks.map(block => `
+            <div class="rv-web-header-card">
+                <div class="rv-web-header-host">${escapeWebAuditHtml(block.host)}</div>
+                <div class="rv-web-header-lines">
+                    ${block.headers.length
+                        ? block.headers.map(line => `<div class="rv-web-header-line">${escapeWebAuditHtml(line)}</div>`).join('')
+                        : '<div class="rv-web-empty">No captured security headers.</div>'}
+                </div>
+            </div>
+        `).join('')
+        : '<div class="rv-web-empty">No header snapshots captured.</div>';
+
+    const html = `
+        <div class="rv-web-audit-shell">
+            ${summaryCards}
+
+            <section class="rv-web-section">
+                <div class="rv-web-section-head">
+                    <span class="rv-web-section-title">Live Web Services</span>
+                    <span class="rv-web-section-chip">${parsed.liveServices.length} targets</span>
+                </div>
+                ${buildWebAuditTable(['Domain', 'Status', 'Redirect / Notes'], liveRows, { emptyText: 'No live web services captured.' })}
+            </section>
+
+            <section class="rv-web-section rv-web-section-split">
+                <div>
+                    <div class="rv-web-section-head">
+                        <span class="rv-web-section-title">HTTP Status Summary</span>
+                    </div>
+                    ${buildWebAuditTable(['Status', 'Responses'], statusRows, { emptyText: 'No status summary captured.' })}
+                </div>
+                <div>
+                    <div class="rv-web-section-head">
+                        <span class="rv-web-section-title">Redirect Summary</span>
+                    </div>
+                    ${buildWebAuditTable(['Domain', 'Status', 'Destination'], redirectRows, { emptyText: 'No redirect activity captured.' })}
+                </div>
+            </section>
+
+            <section class="rv-web-section rv-web-section-split">
+                <div>
+                    <div class="rv-web-section-head">
+                        <span class="rv-web-section-title">WAF Detection</span>
+                    </div>
+                    ${buildWebAuditTable(['Domain', 'Result'], wafRows, { emptyText: 'No WAF detection results captured.' })}
+                </div>
+                <div>
+                    <div class="rv-web-section-head">
+                        <span class="rv-web-section-title">Common Web Files</span>
+                    </div>
+                    ${buildWebAuditTable(['Domain', 'Path', 'Status'], commonFileRows, { emptyText: 'No common file checks captured.' })}
+                </div>
+            </section>
+
+            <section class="rv-web-section">
+                <div class="rv-web-section-head">
+                    <span class="rv-web-section-title">Security Headers Snapshot</span>
+                    <span class="rv-web-section-chip">${parsed.headerBlocks.length} targets</span>
+                </div>
+                <div class="rv-web-header-grid">${headerBlocks}</div>
+            </section>
+        </div>
+    `;
+
+    panel.innerHTML = html;
+    modal.innerHTML = html;
+}
 
 function parseHistoricalUrlsFromParametersText(raw) {
     const text = raw || '';
@@ -1030,6 +1508,7 @@ function renderHistoricalUrlUi() {
 
 document.addEventListener('DOMContentLoaded', function() {
     renderHistoricalUrlUi();
+    renderWebAuditUi();
 });
 
 
@@ -1146,6 +1625,160 @@ function animateProgress(targetProgress) {
     requestAnimationFrame(step);
 }
 
+function classifyScanStage(logLine = '', progressValue = 0) {
+    const line = String(logLine || '').toLowerCase();
+
+    if (line.includes('[done]') || line.includes('db save success')) return 'Completed';
+    if (line.includes('running zap baseline') || line.includes('zap baseline') || line.includes('warn-new:') || line.includes('fail-new:')) return 'Vulnerability Scan';
+    if (line.includes('vulnerability scan') || line.includes('sql injection') || line.includes('dalfox') || line.includes('tinja') || line.includes('commix') || line.includes('testssl')) return 'Vulnerability Scan';
+    if (line.includes('parameterized') || line.includes('parameters') || line.includes('paramining') || line.includes('historical urls')) return 'Parameter Mining';
+    if (line.includes('httpx') || line.includes('live web') || line.includes('web probing') || line.includes('web analysis')) return 'Web Profiling';
+    if (line.includes('host analysis') || line.includes('resolving ip') || line.includes('reverse dns') || line.includes('ssl certificate')) return 'Host Intelligence';
+    if (line.includes('subdomain') || line.includes('amass') || line.includes('subfinder') || line.includes('assetfinder') || line.includes('dns')) return 'Subdomain Enumeration';
+    if (line.includes('osint') || line.includes('metadata') || line.includes('intelligence')) return 'OSINT Enrichment';
+
+    if (progressValue >= 92) return 'Finalizing Report';
+    if (progressValue >= 72) return 'Vulnerability Scan';
+    if (progressValue >= 56) return 'Parameter Mining';
+    if (progressValue >= 38) return 'Web Profiling';
+    if (progressValue >= 20) return 'Host Intelligence';
+    if (progressValue >= 8) return 'Subdomain Enumeration';
+    return 'Initializing';
+}
+
+function classifyZapStatus(logLine = '', progressValue = 0) {
+    const line = String(logLine || '').toLowerCase();
+
+    if (line.includes('[done]') || line.includes('db save success')) return { text: 'Completed', tone: 'ready' };
+    if (line.includes('skipped in fast mode')) return { text: 'Skipped for this scan mode', tone: 'muted' };
+    if (line.includes('running zap baseline') || line.includes('[+] zap baseline')) return { text: 'Container online, collecting passive findings', tone: 'running' };
+    if (line.includes('warn-new:') || line.includes('fail-new:') || line.includes('warn-inprog:') || line.includes('fail-inprog:')) return { text: 'Findings received from ZAP', tone: 'ready' };
+    if (line.includes('no actionable zap findings captured')) return { text: 'Scan finished, no actionable findings captured', tone: 'muted' };
+    if (line.includes('zaproxy') || line.includes('zap image') || line.includes('docker not found')) return { text: 'Preparing ZAP container', tone: 'waiting' };
+    if (progressValue >= 72) return { text: 'Queued for vulnerability stage', tone: 'running' };
+    return { text: 'Waiting for vulnerability stage', tone: 'waiting' };
+}
+
+function setZapWidgetTone(tone = 'waiting') {
+    const zapNode = document.getElementById('widget-zap-status');
+    if (!zapNode) return;
+    zapNode.classList.remove(
+        'rv-zap-status-waiting',
+        'rv-zap-status-running',
+        'rv-zap-status-ready',
+        'rv-zap-status-muted'
+    );
+    zapNode.classList.add(`rv-zap-status-${tone}`);
+}
+
+function updateProgressDetails(logLine = '', engineLabel = null, progressValue = displayedProgress) {
+    const widgetEngine = document.getElementById('widget-engine');
+    const widgetStage = document.getElementById('widget-stage');
+    const widgetZapStatus = document.getElementById('widget-zap-status');
+
+    if (widgetEngine && engineLabel) widgetEngine.textContent = engineLabel;
+    if (widgetStage) widgetStage.textContent = classifyScanStage(logLine, progressValue);
+
+    if (widgetZapStatus) {
+        const zapState = classifyZapStatus(logLine, progressValue);
+        widgetZapStatus.textContent = zapState.text;
+        setZapWidgetTone(zapState.tone);
+    }
+}
+
+function initializeProgressWidgetSession(target, engineLabel) {
+    const widget = document.getElementById('scan-progress-widget');
+    const widgetTarget = document.getElementById('widget-target');
+    const widgetPercent = document.getElementById('widget-percent');
+    const widgetBar = document.getElementById('widget-bar');
+    const overlayStatus = document.getElementById('overlay-status');
+
+    displayedProgress = 0;
+
+    if (widget) widget.classList.remove('d-none');
+    if (widgetTarget) widgetTarget.textContent = target;
+    if (widgetPercent) widgetPercent.textContent = '0%';
+    if (widgetBar) widgetBar.style.width = '0%';
+    if (overlayStatus) overlayStatus.textContent = 'Initializing engine...';
+
+    const taskCode = document.getElementById('widget-task-code');
+    if (taskCode) taskCode.textContent = '0x' + Math.random().toString(16).slice(2, 8).toUpperCase();
+
+    updateProgressDetails('Initializing engine...', engineLabel, 0);
+}
+
+function escapeLogHtml(value = '') {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function classifyLogMeta(message = '', className = '') {
+    const line = String(message || '');
+    const lower = line.toLowerCase();
+    const klass = String(className || '').toLowerCase();
+
+    let module = 'CORE';
+    if (lower.includes('zap') || lower.includes('warn-new:') || lower.includes('fail-new:')) module = 'ZAP';
+    else if (lower.includes('sqlmap')) module = 'SQLMAP';
+    else if (lower.includes('dalfox') || lower.includes('xss')) module = 'DALFOX';
+    else if (lower.includes('tinja') || lower.includes('ssti')) module = 'TINJA';
+    else if (lower.includes('commix')) module = 'COMMIX';
+    else if (lower.includes('testssl') || lower.includes('ssl/tls')) module = 'TESTSSL';
+    else if (lower.includes('httpx') || lower.includes('web')) module = 'WEB';
+    else if (lower.includes('subdomain') || lower.includes('amass') || lower.includes('subfinder')) module = 'SUBS';
+    else if (lower.includes('host analysis') || lower.includes('reverse dns') || lower.includes('resolving ip')) module = 'HOST';
+    else if (lower.includes('parameter') || lower.includes('paramining') || lower.includes('historical urls')) module = 'PARAM';
+    else if (lower.includes('[ssh]') || lower.includes('kali')) module = 'SSH';
+    else if (lower.includes('nuclei')) module = 'NUCLEI';
+
+    let severity = 'info';
+    if (klass.includes('danger') || lower.includes('[critical]') || lower.startsWith('[!]') || lower.includes('fail-new:')) severity = 'danger';
+    else if (klass.includes('success') || lower.includes('[done]') || lower.includes('db save success')) severity = 'success';
+    else if (klass.includes('warning') || lower.includes('[warn]') || lower.includes('warn-new:')) severity = 'warning';
+
+    const stage = classifyScanStage(line, displayedProgress);
+    return { module, severity, stage, isZap: module === 'ZAP' };
+}
+
+function createStructuredLogEntry(message, className = 'text-info') {
+    const logEntry = document.createElement('div');
+    logEntry.className = `log-entry rv-log-entry ${className}`.trim();
+    logEntry.innerHTML = `<div class="rv-log-message">${escapeLogHtml(message)}</div>`;
+    return logEntry;
+}
+
+function resetSystemLogs(engineLabel, target, dictFile = 'dns_list.txt', options = {}) {
+    const mode = options.mode || '';
+    const modules = options.modules || '';
+    const subdomainMode = options.subdomainMode || 'active';
+    const selectedModules = String(modules || '')
+        .split(',')
+        .map(v => v.trim())
+        .filter(Boolean);
+    const shouldShowSubdomainMode =
+        String(mode).toLowerCase() === 'full' &&
+        selectedModules.includes('subdomains');
+
+    const introLines = [
+        `[SYSTEM] Initializing ${engineLabel} Engine with wordlist: ${dictFile}...`,
+        `[TARGET] Active target locked: ${target}`,
+        `[ZAP] Passive scan monitor armed. Waiting for vulnerability stage telemetry.`
+    ];
+
+    if (shouldShowSubdomainMode) {
+        introLines.splice(1, 0, `[CONFIG] Subdomain Recon Mode: ${String(subdomainMode).toUpperCase()}`);
+    }
+
+    if (logBox) logBox.innerHTML = '';
+    if (logBoxModal) logBoxModal.innerHTML = '';
+
+    introLines.forEach(line => appendLogToPanels(line, line.includes('[ZAP]') ? 'text-warning' : 'text-info'));
+}
+
 
 document.addEventListener('DOMContentLoaded', function() {
         renderHistoricalUrlUi();
@@ -1184,11 +1817,35 @@ const subdomainsCheck = document.getElementById('mod_subdomains');
 const dictPicker      = document.getElementById('dict-picker');
 const dictSelect      = document.getElementById('dict-select');
 const dictInfo        = document.getElementById('dict-info');
+const subdomainModePicker = document.getElementById('subdomain-mode-picker');
+const subdomainModeInfo   = document.getElementById('subdomain-mode-info');
+const subdomainModeInputs = document.querySelectorAll('input[name="subdomain_mode"]');
 
 // ── Show/Hide Logic ──
+function getSelectedSubdomainMode() {
+    const selected = document.querySelector('input[name="subdomain_mode"]:checked');
+    return selected ? selected.value : 'active';
+}
+
 function toggleDictPicker() {
     if (!dictPicker || !subdomainsCheck) return;
-    dictPicker.style.display = subdomainsCheck.checked ? 'block' : 'none';
+
+    const deepRadio = document.getElementById('full');
+    const isDeep = !!(deepRadio && deepRadio.checked);
+    const wantsSubdomains = !!subdomainsCheck.checked;
+    const selectedMode = getSelectedSubdomainMode();
+
+    if (subdomainModePicker) {
+        subdomainModePicker.style.display = (isDeep && wantsSubdomains) ? 'block' : 'none';
+    }
+
+    dictPicker.style.display = (isDeep && wantsSubdomains && selectedMode === 'active') ? 'block' : 'none';
+
+    if (subdomainModeInfo) {
+        subdomainModeInfo.textContent = selectedMode === 'passive'
+            ? 'Passive recon uses subfinder and amass. Dictionary selection is not required.'
+            : 'Active recon uses the dictionary picker below.';
+    }
 }
 
 // ── Load available dicts from Flask API ──
@@ -1245,6 +1902,7 @@ function updateInfoText() {
 // ── Event Listeners ──
 if (subdomainsCheck) subdomainsCheck.addEventListener('change', toggleDictPicker);
 if (dictSelect) dictSelect.addEventListener('change', updateInfoText);
+subdomainModeInputs.forEach(input => input.addEventListener('change', toggleDictPicker));
 
 document.addEventListener('DOMContentLoaded', () => {
     toggleDictPicker();
@@ -1264,7 +1922,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const widgetPercent = document.getElementById('widget-percent');
     const kaliSshState = document.getElementById('kali-ssh-state');
     const kaliSshSummary = document.getElementById('kali-ssh-summary');
-
+    
     // Show the Kali Engine toggle only for Deep scan (full). Fast scan keeps it hidden.
     const kaliEngineToggle = document.getElementById('kali-engine-toggle');
     const fastModeRadio = document.getElementById('fast');
@@ -1360,17 +2018,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function appendLogToPanels(message, className = 'text-info') {
             if (logBox) {
-                const logEntry = document.createElement('div');
-                logEntry.className = `log-entry ${className}`.trim();
-                logEntry.textContent = message;
+                const logEntry = createStructuredLogEntry(message, className);
                 logBox.appendChild(logEntry);
                 logBox.scrollTop = logBox.scrollHeight;
             }
 
             if (logBoxModal) {
-                const modalEntry = document.createElement('div');
-                modalEntry.className = `log-entry ${className}`.trim();
-                modalEntry.textContent = message;
+                const modalEntry = createStructuredLogEntry(message, className);
                 logBoxModal.appendChild(modalEntry);
                 logBoxModal.scrollTop = logBoxModal.scrollHeight;
             }
@@ -1407,14 +2061,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!target) return alert("Please enter a target domain for the Kali Engine.");
             updateKaliPanel('Connected', `Opening SSH session to {{ kali_user or 'kali' }}@{{ kali_host or '192.168.100.250' }} for ${target}...`);
+            resetSystemLogs('PC Kali (SSH)', target, 'dns_list.txt', {
+                mode: 'full',
+                modules: 'osint,subdomains,hosts,web,paramining,vulns',
+                subdomainMode: getSelectedSubdomainMode()
+            });
             appendLogToPanels(`[SSH] Remote Kali session requested for ${target}`, 'text-danger');
 
             // 1. Prepare UI for Remote HUD
             if(widget) {
-                widget.classList.remove('d-none');
-                widgetTarget.textContent = target;
-                // Generate a cool "Task Code" for the professional look
-                document.getElementById('widget-task-code').textContent = '0x' + Math.random().toString(16).slice(2, 8).toUpperCase();
+                initializeProgressWidgetSession(target, 'PC Kali (SSH)');
             }
             
             // Show terminal for remote logs
@@ -1430,9 +2086,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const THREAT_ALERTS_ENABLED =
             document.getElementById('rv-scan-root')?.dataset?.threatAlerts === '1';
             const dictFile = document.getElementById('dict-select')?.value || 'dns_list.txt';
+            const subdomainMode = getSelectedSubdomainMode();
             const modules = 'osint,subdomains,hosts,web,paramining,vulns';
             const eventSource = new EventSource(
-            `/stream_kali_recon?target=${encodeURIComponent(target)}&mode=full&modules=${encodeURIComponent(modules)}&dict_file=${encodeURIComponent(dictFile)}`
+            `/stream_kali_recon?target=${encodeURIComponent(target)}&mode=full&modules=${encodeURIComponent(modules)}&dict_file=${encodeURIComponent(dictFile)}&subdomain_mode=${encodeURIComponent(subdomainMode)}`
             );
             activeEventSource = eventSource;
             updateKaliPanel('Streaming', `SSH stream active for ${target}. Waiting for telemetry from /stream_kali_recon...`);
@@ -1458,6 +2115,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Update HUD Widget
                 if (overlayStatus) overlayStatus.textContent = data.log;
+                updateProgressDetails(data.log, 'PC Kali (SSH)', data.progress ?? displayedProgress);
 
                 // Progress: always update (even 0) using your smooth animator
                 if (data.progress !== undefined && data.progress !== null) {
@@ -1481,6 +2139,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }));
 
                     if (overlayStatus) overlayStatus.innerHTML = "<span class='text-success fw-bold'>KALI SCAN COMPLETE</span>";
+                    updateProgressDetails('[DONE]', 'PC Kali (SSH)', 100);
 
                     showScanCompleteModal(target, 'PC Kali (SSH)');
                 }
@@ -1497,6 +2156,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateKaliPanel('Offline', `SSH stream to {{ kali_host or '192.168.100.250' }} failed or was interrupted.`);
                 appendLogToPanels('[ERROR] SSH stream interrupted. Check Kali PC connectivity.', 'text-danger');
                 if(overlayStatus) overlayStatus.innerHTML = "<span class='text-danger'>[!] KALI HARDWARE TIMEOUT</span>";
+                updateProgressDetails('Kali hardware timeout', 'PC Kali (SSH)', displayedProgress);
                 alert("Connection to Kali Hardware lost. Check if the PC at 192.168.100.250 is online.");
             };
         }
@@ -1528,6 +2188,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (modulePanel) {
             modulePanel.classList.add('d-none');
         }
+        toggleDictPicker();
     }
 
     if (fastRadio) fastRadio.addEventListener('change', toggleModules);
@@ -1549,6 +2210,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const leftAnchor = document.getElementById('rv-left-anchor');
         const fullwidthAnchor = document.getElementById('rv-fullwidth-anchor');
+        const fullwidthRow = document.getElementById('rv-fullwidth-row');
         const fastLayout = document.getElementById('rv-fast-left-layout');
 
         const hvo = document.getElementById('rv-hvo-panels');
@@ -1567,7 +2229,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const slotVuln = document.getElementById('rv-fast-slot-vuln');
         const slotOwasp = document.getElementById('rv-fast-slot-owasp');
 
-        if (!leftAnchor || !fullwidthAnchor || !fastLayout) return;
+        if (!leftAnchor || !fullwidthAnchor || !fullwidthRow || !fastLayout) return;
         if (!hvo || !osaiRow) return;
         if (!logsPanel) return;
         if (!hostCol || !vulnCol || !owaspCol || !osintCol || !aiCol) return;
@@ -1657,6 +2319,9 @@ document.addEventListener('DOMContentLoaded', () => {
             restore('ai');
             restore('logs');
         }
+
+        const hasFullwidthPanels = fullwidthAnchor.children.length > 0;
+        fullwidthRow.classList.toggle('rv-empty', !hasFullwidthPanels);
 
         // Heights depend on where panels are placed and can change when toggling modes.
         if (typeof syncTopPanelHeights === 'function') {
@@ -1749,22 +2414,24 @@ document.addEventListener('DOMContentLoaded', () => {
             : Array.from(formData.getAll('modules')).join(',');
 
             const dictFile = document.getElementById('dict-select')?.value || 'dns_list.txt';
+            const subdomainMode = getSelectedSubdomainMode();
 
 
-            console.log(`[DEBUG] Form submitted: target=${target}, mode=${mode}, dict=${dictFile}, modules=${modules}`);
-
-            if(overlay) overlay.style.display = 'none'; 
-            if(widget) {
-                widget.classList.remove('d-none');
-                widgetTarget.textContent = target;
-            }
+            console.log(`[DEBUG] Form submitted: target=${target}, mode=${mode}, dict=${dictFile}, subdomain_mode=${subdomainMode}, modules=${modules}`);
 
             const useKaliFull = (mode === 'full') && (document.getElementById('useKaliFull')?.checked === true);
             const engineLabel = useKaliFull ? 'PC Kali (SSH)' : 'Local WSL';
 
-            if (logBox) {
-                logBox.innerHTML = `<div class='log-entry text-info'>[SYSTEM] Initializing ${engineLabel} Engine with wordlist: ${dictFile}...</div>`;
+            if(overlay) overlay.style.display = 'none'; 
+            if(widget) {
+                initializeProgressWidgetSession(target, engineLabel);
             }
+
+            resetSystemLogs(engineLabel, target, dictFile, {
+                mode,
+                modules,
+                subdomainMode
+            });
 
             // ← ADD dictFile PARAMETER HERE
            // templates/scanTarget.html
@@ -1772,8 +2439,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
             const url = useKaliFull
-                ? `/stream_kali_recon?target=${encodeURIComponent(target)}&mode=${mode}&modules=${encodeURIComponent(modules)}&dict_file=${encodeURIComponent(dictFile)}`
-                : `/stream_recon?target=${encodeURIComponent(target)}&mode=${mode}&modules=${encodeURIComponent(modules)}&dict_file=${encodeURIComponent(dictFile)}`;
+                ? `/stream_kali_recon?target=${encodeURIComponent(target)}&mode=${mode}&modules=${encodeURIComponent(modules)}&dict_file=${encodeURIComponent(dictFile)}&subdomain_mode=${encodeURIComponent(subdomainMode)}`
+                : `/stream_recon?target=${encodeURIComponent(target)}&mode=${mode}&modules=${encodeURIComponent(modules)}&dict_file=${encodeURIComponent(dictFile)}&subdomain_mode=${encodeURIComponent(subdomainMode)}`;
 
             console.log(`[DEBUG] EventSource URL: ${url}`);
             window.currentScanMode = useKaliFull ? 'remote' : 'local';
@@ -1804,6 +2471,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 appendLogToPanels(data.log, className);
 
                 if (overlayStatus) overlayStatus.textContent = data.log;
+                updateProgressDetails(data.log, engineLabel, data.progress ?? displayedProgress);
 
                 // Progress: always update (even 0) using your smooth animator
                 if (data.progress !== undefined && data.progress !== null) {
@@ -1822,6 +2490,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('start-btn')?.classList.remove('d-none');
                     document.getElementById('stop-btn')?.classList.add('d-none');
                     window.currentScanMode = null;
+                    updateProgressDetails('[DONE]', engineLabel, 100);
 
                     showScanCompleteModal(target, engineLabel);
                 }
@@ -1835,6 +2504,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('stop-btn')?.classList.add('d-none');
                 window.currentScanMode = null;
                 if(widget) widget.classList.add('d-none');
+                updateProgressDetails('Stream interrupted', engineLabel, displayedProgress);
                 alert("Connection to ReconVault Engine lost.");
             };
             
